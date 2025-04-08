@@ -58,7 +58,8 @@ def home():
 
 @app.route('/api/playlist/aptitude', methods=['GET'])
 def get_playlist_videos():
-    playlist_id = "PLAEwcO9ReeIG0BrjkUH1_q3GIY2m5jUYS"
+    playlist_id = request.args.get('playlistId')  # Get from query parameter
+
     if not playlist_id:
         return jsonify({"error": "Missing 'playlistId' query parameter"}), 400
 
