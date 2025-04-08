@@ -56,12 +56,12 @@ def fetch_playlist_videos(api_key, playlist_id):
 def home():
     return "Hello world"
 
-@app.route('/api/playlist/aptitude', methods=['GET'])
-def get_playlist_videos():
-    playlist_id = request.args.get('playlistId')  # Get from query parameter
-
+@app.route('/api/playlist/aptitude/<playlist_id>', methods=['GET'])
+def get_playlist_videos(playlist_id):
+    print(playlist_id)
+    
     if not playlist_id:
-        return jsonify({"error": "Missing 'playlistId' query parameter"}), 400
+        return jsonify({"error": "Missing playlistId in URL path"}), 400
 
     result = fetch_playlist_videos(YOUTUBE_API_KEY, playlist_id)
 
@@ -69,6 +69,7 @@ def get_playlist_videos():
         return jsonify(result), 500
 
     return jsonify(result)
+
 
 
 if __name__ == '__main__':
