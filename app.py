@@ -14,6 +14,13 @@ CORS(app)  # 👈 Enable CORS for all routes
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
 
+import re
+
+def extract_lesson_number(title):
+    match = re.search(r"L(\d+)", title)
+    return int(match.group(1)) if match else float('inf')  # Put unnumbered titles at the end
+
+
 def fetch_playlist_videos(api_key, playlist_id):
     videos = []
     next_page_token = ""
@@ -33,24 +40,40 @@ def fetch_playlist_videos(api_key, playlist_id):
         if "error" in data:
             return {"error": data["error"]["message"]}
 
-        for item in data["items"]:
-            snippet = item["snippet"]
+        for item in data.get("items", []):
+            snippet = item.get("snippet", {})
+            title = snippet.get("title", "").lower()
+
+            # 🚫 Skip deleted/private videos
+            if "deleted video" in title or "private video" in title:
+                continue
+
+            thumbnails = snippet.get("thumbnails", {})
+            thumbnail_url = (
+                thumbnails.get("medium", {}).get("url") or
+                thumbnails.get("default", {}).get("url") or
+                thumbnails.get("high", {}).get("url") or
+                ""
+            )
+
             video = {
-                "title": snippet["title"],
-                "description": snippet["description"],
-                "videoId": snippet["resourceId"]["videoId"],
-                "thumbnail": snippet["thumbnails"]["medium"]["url"],
-                "publishedAt": snippet["publishedAt"],
-                "channelTitle": snippet["channelTitle"]
+                "title": snippet.get("title", "No Title"),
+                "description": snippet.get("description", ""),
+                "videoId": snippet.get("resourceId", {}).get("videoId", ""),
+                "thumbnail": thumbnail_url,
+                "publishedAt": snippet.get("publishedAt", ""),
+                "channelTitle": snippet.get("channelTitle", "")
             }
+
             videos.append(video)
 
         next_page_token = data.get("nextPageToken")
         if not next_page_token:
             break
 
-    return videos
+    videos.sort(key=lambda x: extract_lesson_number(x["title"]))
 
+    return videos
 
 @app.route("/")
 def home():
