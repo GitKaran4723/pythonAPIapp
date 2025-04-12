@@ -9,7 +9,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=["https://karanjadhav.tech"])
 
 # API's for various applications
 
