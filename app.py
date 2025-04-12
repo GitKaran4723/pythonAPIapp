@@ -3,11 +3,13 @@ from flask_cors import CORS  # 👈 Import CORS
 from dotenv import load_dotenv
 import requests
 import os
+import google.generativeai as genai
+from youtube_transcript_api import YouTubeTranscriptApi
 
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app)  # 👈 Enable CORS for all routes
+CORS(app)
 
 # API's for various applications
 
@@ -78,6 +80,36 @@ def fetch_playlist_videos(api_key, playlist_id):
 @app.route("/")
 def home():
     return "Hello world"
+
+genai.configure(api_key=os.getenv("GEMINI_API"))
+model = genai.GenerativeModel("gemini-2.0-flash")
+
+@app.route("/api/ask", methods=["POST"])
+def ask():
+    data = request.json
+    mode = data.get("mode")
+    prompt = data.get("prompt")
+
+    try:
+        if mode == "video":
+            video_id = prompt.strip().split("v=")[-1].split("&")[0]
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            transcript = " ".join([t["text"] for t in transcript_list])
+            query = f"Make detailed notes from this YouTube video transcript:{transcript}"
+        elif mode == "notes":
+            # Placeholder for markdown-based RAG (simple context-based)
+            # You can replace this with actual vector search in future
+            query = f"Answer this using study notes: {prompt}"
+        elif mode == "general":
+            query = prompt
+        else:
+            return jsonify({"error": "Invalid mode"}), 400
+
+        response = model.generate_content(query)
+        return jsonify({"response": response.text})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/playlist/aptitude/<playlist_id>', methods=['GET'])
 def get_playlist_videos(playlist_id):
