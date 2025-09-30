@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from flask_cors import CORS  # 👈 Import CORS
 from dotenv import load_dotenv
 import requests
@@ -15,6 +15,8 @@ CORS(app, origins=["https://karanjadhav.tech"])
 
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
+
+Schedule_data_script_url = os.getenv('web_app')
 
 import re
 
@@ -79,8 +81,10 @@ def fetch_playlist_videos(api_key, playlist_id):
 
 @app.route("/")
 def home():
-    return "Hello world"
-
+    data = requests.get(Schedule_data_script_url, timeout=10).json()
+    # data is a 2D array: [["id","Goals","prep_phase","month_year","to_do"], [1, ...], ...]
+    return render_template("index.html", items=data)
+    
 genai.configure(api_key=os.getenv("GEMINI_API"))
 model = genai.GenerativeModel("gemini-2.0-flash")
 
