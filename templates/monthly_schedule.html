@@ -1,9 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Monthly Goals Timeline</title>
+{# templates/monthly_schedule.html #}
+{% extends "base.html" %}
+{% block title %}Monthly Schedule{% endblock %}
+{% block content %}
 
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -17,7 +15,7 @@
     .now-pulse { animation: pulse 2s infinite; }
     @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(16,185,129,0.45);} 70%{box-shadow:0 0 0 12px rgba(16,185,129,0);} 100%{box-shadow:0 0 0 0 rgba(16,185,129,0);} }
   </style>
-</head>
+
 <body class="min-h-screen text-slate-100">
   <!-- Header -->
   <header class="max-w-6xl mx-auto px-4 md:px-6 pt-8 pb-4">
@@ -253,4 +251,4 @@
     applyRender();
   </script>
 </body>
-</html>
+{% endblock %}

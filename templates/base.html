@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}Schedule — Milk Diary{% endblock %}</title>
+
+  <!-- PWA -->
+  <meta name="theme-color" content="#0b84ff" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/static/icons/icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
+
+  <link rel="stylesheet" href="/static/css/app.css" />
+
+  <style>
+    /* --- Mobile layout helpers (lightweight, no framework) --- */
+    :root {
+      --brand:#0b84ff;
+      --bg:#ffffff;
+      --ink:#0c1117;
+      --muted:#6b7280;
+      --surface:#f6f7fb;
+      --radius:16px;
+    }
+    body { background: var(--surface); color: var(--ink); }
+    .appbar {
+      position: sticky; top: 0; z-index: 40;
+      display:flex; align-items:center; gap:.75rem;
+      padding:.75rem 1rem; background:var(--bg); box-shadow:0 1px 8px rgba(0,0,0,.06);
+    }
+    .brand { display:flex; align-items:center; gap:.5rem; font-weight:700; }
+    .brand .dot { width:10px; height:10px; border-radius:999px; background:var(--brand); display:inline-block; }
+    .spacer { flex:1; }
+    .btn, .menu a {
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:.65rem 1rem; border-radius:.75rem; border:1px solid #e5e7eb; background:#fff;
+      text-decoration:none; color:inherit; font-weight:600;
+    }
+    .btn:active { transform: translateY(1px); }
+    .ghost { background:transparent; border:1px solid #e5e7eb; }
+    .primary { background:var(--brand); color:#fff; border-color:transparent; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
+    main { margin-top: .5rem; }
+
+    /* Slide-in menu */
+    .backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      display: none; z-index: 50;
+    }
+    .backdrop.show { display:block; }
+    .drawer {
+      position: fixed; inset: 0 auto 0 0; width: 80%; max-width: 320px;
+      background:#fff; box-shadow: 2px 0 16px rgba(0,0,0,.12);
+      transform: translateX(-100%); transition: transform .25s ease; z-index: 60;
+      display:flex; flex-direction:column; padding:1rem;
+    }
+    .drawer.show { transform: translateX(0); }
+    .menu { display:flex; flex-direction:column; gap:.5rem; }
+    .menu a { text-align:left; }
+
+    /* Gate modal */
+    .modal {
+      position: fixed; inset: 0; display: none; place-items: center; z-index: 70;
+      background: rgba(0,0,0,.4);
+    }
+    .modal.show { display: grid; }
+    .card {
+      width:min(92vw, 420px); background:#fff; border-radius: var(--radius);
+      box-shadow:0 10px 30px rgba(0,0,0,.15); padding:1.25rem;
+    }
+    .card h2 { margin:.25rem 0 .75rem; }
+    .field { display:flex; gap:.5rem; }
+    .field input {
+      flex:1; padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:.6rem; outline:none;
+    }
+    .note { font-size:.9rem; color: var(--muted); margin-top:.5rem; }
+
+    /* Motivation strip */
+    .motivation {
+      background: linear-gradient(120deg, rgba(11,132,255,.1), rgba(11,132,255,.05));
+      border:1px dashed rgba(11,132,255,.35);
+      padding:1rem; border-radius:var(--radius); margin: .75rem 0 1rem;
+    }
+
+    /* Bottom actions on small screens */
+    @media (max-width: 768px) {
+      .actions { display:none; }
+      .fab {
+        position: fixed; right: 16px; bottom: 16px; z-index: 40;
+      }
+    }
+  </style>
+
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  <!-- App Bar -->
+  <header class="appbar">
+    <button id="menuBtn" class="btn ghost" aria-label="Open menu">☰</button>
+    <div class="brand">
+      <span class="dot"></span> <span>Milk Diary</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="actions">
+      <a class="btn ghost" href="/">Home</a>
+      <a class="btn" href="/schedule">Monthly Schedule</a>
+      <button id="installBtn" class="btn primary" hidden>Install App</button>
+    </div>
+  </header>
+
+  <!-- Slide-in Drawer -->
+  <div id="backdrop" class="backdrop"></div>
+  <nav id="drawer" class="drawer" aria-label="Main">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: .5rem;">
+      <div class="brand"><span class="dot"></span><span>Menu</span></div>
+      <button id="closeDrawer" class="btn ghost" aria-label="Close menu">✕</button>
+    </div>
+    <div class="menu">
+      <a href="/" class="btn">Home</a>
+      <a href="/schedule" class="btn">Monthly Schedule</a>
+      <button id="installBtn2" class="btn primary" hidden>Install App</button>
+    </div>
+  </nav>
+
+  <!-- Gate Modal -->
+  <div id="gateModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
+    <div class="card">
+      <h2 id="gateTitle">Enter Access Code</h2>
+      <p class="note">This keeps your schedule private on this device.</p>
+      <div class="field">
+        <input id="codeInput" type="password" placeholder="Access code" autocomplete="one-time-code" />
+        <button id="codeSubmit" class="btn primary">Enter</button>
+      </div>
+      <p id="gateError" class="note" style="color:#b91c1c; display:none;">Incorrect code. Try again.</p>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="container">
+    <!-- Motivation block shows on landing -->
+    <section id="motivation" class="motivation" style="display:none;">
+      <strong id="motivationLine">Consistency beats intensity. Show up today.</strong>
+    </section>
+
+    {% block content %}
+    <!-- Page-specific content goes here -->
+    {% endblock %}
+  </div>
+
+  <!-- Floating Install on mobile -->
+  <div class="fab">
+    <button id="installBtn3" class="btn primary" hidden>Install</button>
+  </div>
+
+  <script src="/static/js/pwa.js"></script>
+  <script>
+    // ---------- Drawer ----------
+    const drawer = document.getElementById('drawer');
+    const backdrop = document.getElementById('backdrop');
+    const menuBtn = document.getElementById('menuBtn');
+    const closeDrawer = document.getElementById('closeDrawer');
+    const toggleDrawer = (show) => {
+      drawer.classList.toggle('show', show);
+      backdrop.classList.toggle('show', show);
+    };
+    menuBtn?.addEventListener('click', () => toggleDrawer(true));
+    closeDrawer?.addEventListener('click', () => toggleDrawer(false));
+    backdrop?.addEventListener('click', () => toggleDrawer(false));
+
+    // ---------- Install Buttons (wire to beforeinstallprompt from pwa.js if desired) ----------
+    let deferredPromptEvent = null;
+    const installButtons = [document.getElementById('installBtn'), document.getElementById('installBtn2'), document.getElementById('installBtn3')].filter(Boolean);
+
+    // Capture event here (some browsers need this in page scope)
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPromptEvent = e;
+      installButtons.forEach(b => b.hidden = false);
+    });
+
+    installButtons.forEach(btn => btn.addEventListener('click', async () => {
+      if (!deferredPromptEvent) return;
+      deferredPromptEvent.prompt();
+      await deferredPromptEvent.userChoice;
+      deferredPromptEvent = null;
+      installButtons.forEach(b => b.hidden = true);
+    }));
+
+    // ---------- Code Gate ----------
+    // Set ACCESS_CODE via Flask: render_template(..., access_code='YOURCODE')
+    const ACCESS_CODE = "{{ access_code|default('1234') }}";
+    const GATE_KEY = 'md_gate_ok_v1';
+
+    const gateModal = document.getElementById('gateModal');
+    const codeInput = document.getElementById('codeInput');
+    const codeSubmit = document.getElementById('codeSubmit');
+    const gateError = document.getElementById('gateError');
+    const motivation = document.getElementById('motivation');
+    const motivationLine = document.getElementById('motivationLine');
+
+    const LINES = [
+      "Consistency beats intensity. Show up today.",
+      "Small steps daily lead to big results.",
+      "Done is better than perfect — keep moving.",
+      "Discipline is choosing what you want most over what you want now.",
+      "Your future self is watching. Don’t skip today."
+    ];
+
+    function pickLine() {
+      motivationLine.textContent = LINES[Math.floor(Math.random()*LINES.length)];
+    }
+
+    function showGateIfNeeded() {
+      const ok = localStorage.getItem(GATE_KEY);
+      if (ok === 'yes') {
+        // Already unlocked
+        motivation.style.display = 'block';
+        pickLine();
+        return;
+      }
+      gateModal.classList.add('show');
+      setTimeout(() => codeInput?.focus(), 50);
+    }
+
+    codeSubmit?.addEventListener('click', tryUnlock);
+    codeInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+
+    function tryUnlock() {
+      const val = (codeInput?.value || "").trim();
+      if (val === ACCESS_CODE) {
+        localStorage.setItem(GATE_KEY, 'yes');
+        gateModal.classList.remove('show');
+        gateError.style.display = 'none';
+        motivation.style.display = 'block';
+        pickLine();
+      } else {
+        gateError.style.display = 'block';
+      }
+    }
+
+    // Run on load
+    window.addEventListener('load', showGateIfNeeded);
+  </script>
+
+  {% block body_extra %}{% endblock %}
+</body>
+</html>

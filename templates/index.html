@@ -1,28 +1,10 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Milk Diary</title>
-
-  <!-- PWA: theme color shows on Android status bar/splash -->
-  <meta name="theme-color" content="#0b84ff" />
-
-  <!-- PWA: manifest & icons -->
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="icon" href="/static/icons/icon-192.png" sizes="192x192" />
-  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
-
-  <link rel="stylesheet" href="/static/css/app.css" />
-</head>
-<body>
+{# templates/index.html #}
+{% extends "base.html" %}
+{% block title %}Home — Milk Diary{% endblock %}
+{% block content %}
   <main>
-    <h1>Milk Diary</h1>
-    <p>Install me on your phone and use me offline!</p>
-    <button onclick="location.href='/schedule'">See Schedule</button>
-    <p class="status" id="status"></p>
+    <h1>Welcome back 👋</h1>
+    <p>Tap “Monthly Schedule” in the menu to view or update your plan.</p>
+    <button class="btn" onclick="location.href='/schedule'">Go to Monthly Schedule</button>
   </main>
-
-  <script src="/static/js/pwa.js"></script>
-</body>
-</html>
+{% endblock %}

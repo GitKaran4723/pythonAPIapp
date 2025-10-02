@@ -106,6 +106,9 @@ def sw():
     response.headers["Cache-Control"] = "no-cache"
     return response
 
+@app.context_processor
+def inject_access_code():
+    return {"access_code": os.getenv("APP_ACCESS_CODE", "1234")}
 
 
     
