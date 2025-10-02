@@ -1,15 +1,17 @@
-// Register the service worker
+// static/js/pwa.js
 window.addEventListener('load', async () => {
   if ('serviceWorker' in navigator) {
     try {
       const reg = await navigator.serviceWorker.register('/sw.js');
       console.log('Service worker registered', reg);
-      document.getElementById('status').textContent = 'Service worker ready.';
+      const statusEl = document.getElementById('status');
+      if (statusEl) statusEl.textContent = 'Service worker ready.';
     } catch (err) {
       console.error('Service worker registration failed', err);
     }
   }
 });
+
 
 // Optional: custom install prompt
 let deferredPrompt;
