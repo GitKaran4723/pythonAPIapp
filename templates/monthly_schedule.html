@@ -1,58 +1,86 @@
 {# templates/monthly_schedule.html #}
 {% extends "base.html" %}
-{% block title %}Monthly Schedule{% endblock %}
-{% block content %}
+{% block title %}Monthly Schedule — NewTon{% endblock %}
 
-  <!-- Tailwind CDN -->
+{% block head_extra %}
+  <!-- Tailwind & Fonts (scoped to this page only) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
-    html, body { background: radial-gradient(1200px 800px at 80% -10%, #1e1b4b 0%, #0b1020 50%, #070b16 100%) fixed; }
+    /* Page background + glass aesthetics */
+    html, body {
+      background: radial-gradient(1200px 800px at 80% -10%, #1e1b4b 0%, #0b1020 50%, #070b16 100%) fixed;
+    }
     body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
-    .glass { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08); }
-    .timeline::before { content:""; position:absolute; left:1rem; top:0; bottom:0; width:3px; background: linear-gradient(180deg, rgba(124,58,237,0.0), rgba(124,58,237,0.6), rgba(59,130,246,0.0)); }
-    .now-pulse { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(16,185,129,0.45);} 70%{box-shadow:0 0 0 12px rgba(16,185,129,0);} 100%{box-shadow:0 0 0 0 rgba(16,185,129,0);} }
-  </style>
 
-<body class="min-h-screen text-slate-100">
+    .glass {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .timeline::before {
+      content:""; position:absolute; left:1rem; top:0; bottom:0; width:3px;
+      background: linear-gradient(180deg, rgba(124,58,237,0.0), rgba(124,58,237,0.6), rgba(59,130,246,0.0));
+    }
+
+    .now-pulse { animation: pulse 2s infinite; }
+    @keyframes pulse {
+      0%{box-shadow:0 0 0 0 rgba(16,185,129,0.45);}
+      70%{box-shadow:0 0 0 12px rgba(16,185,129,0);}
+      100%{box-shadow:0 0 0 0 rgba(16,185,129,0);}
+    }
+
+    /* Make filters stick under the app bar on mobile */
+    .sticky-filters {
+      position: sticky; top: 64px; z-index: 20;
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
   <!-- Header -->
-  <header class="max-w-6xl mx-auto px-4 md:px-6 pt-8 pb-4">
+  <header class="max-w-6xl mx-auto px-4 md:px-6 pt-6 md:pt-8 pb-4">
     <div class="flex items-start md:items-center gap-4 flex-col md:flex-row">
       <div class="flex-1">
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight">📅 Monthly Goals Timeline</h1>
-        <p class="text-slate-300 mt-2">Auto-highlighted for <span id="currentMonthLabel" class="font-semibold text-emerald-300">current month</span>.</p>
+        <h1 class="text-3xl md:text-4xl font-bold tracking-tight text-slate-50">📅 Monthly Goals Timeline</h1>
+        <p class="text-slate-300 mt-2">
+          Auto-highlighted for <span id="currentMonthLabel" class="font-semibold text-emerald-300">current month</span>.
+        </p>
       </div>
       <div class="flex gap-2">
-        <button id="refreshBtn" class="glass rounded-xl px-4 py-2 text-sm hover:ring-2 ring-violet-500">Refresh</button>
+        <button id="refreshBtn" class="glass rounded-xl px-4 py-2 text-sm hover:ring-2 ring-violet-500 text-slate-100">Refresh</button>
       </div>
     </div>
   </header>
 
   <!-- Controls -->
-  <section class="max-w-6xl mx-auto px-4 md:px-6">
+  <section class="max-w-6xl mx-auto px-4 md:px-6 sticky-filters">
     <div class="glass rounded-2xl p-4 md:p-5">
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-center">
         <!-- Goal filter -->
         <div class="flex gap-3 items-center">
           <label class="text-sm text-slate-300 shrink-0">Goal</label>
-<select id="goalFilter"
-  class="w-full glass rounded-xl px-3 py-2 text-sm text-slate-100 bg-slate-900/70
-         focus:outline-none focus:ring-2 ring-violet-500">
-</select>        </div>
+          <select id="goalFilter"
+                  class="w-full glass rounded-xl px-3 py-2 text-sm text-slate-100 bg-slate-900/70
+                         focus:outline-none focus:ring-2 ring-violet-500"></select>
+        </div>
 
         <!-- Month filter -->
         <div class="flex gap-3 items-center">
           <label class="text-sm text-slate-300 shrink-0">Month</label>
-          <select id="monthFilter" class="w-full glass rounded-xl px-3 py-2 text-sm text-slate-100 bg-slate-900/70
-         focus:outline-none focus:ring-2 ring-violet-500"></select>
+          <select id="monthFilter"
+                  class="w-full glass rounded-xl px-3 py-2 text-sm text-slate-100 bg-slate-900/70
+                         focus:outline-none focus:ring-2 ring-violet-500"></select>
         </div>
 
         <!-- Search -->
         <div class="flex items-center gap-3">
-          <input id="searchBox" placeholder="Search tasks…" class="w-full bg-transparent glass rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 ring-violet-500" />
-          <button id="clearSearch" class="hidden text-xs px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-800">Clear</button>
+          <input id="searchBox" placeholder="Search tasks…"
+                 class="w-full bg-transparent glass rounded-xl px-3 py-2 text-sm text-slate-100
+                        focus:outline-none focus:ring-2 ring-violet-500" />
+          <button id="clearSearch" class="hidden text-xs px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-800 text-slate-200">Clear</button>
         </div>
       </div>
 
@@ -61,17 +89,35 @@
     </div>
   </section>
 
+  <!-- Summary strip -->
+  <section class="max-w-6xl mx-auto px-4 md:px-6 pt-4">
+    <div id="summaryStrip" class="glass rounded-2xl p-4 md:p-5 text-slate-200 flex flex-wrap gap-4 text-sm">
+      <!-- Filled by JS: counts, months covered, etc. -->
+    </div>
+  </section>
+
   <!-- Timeline -->
-  <main class="max-w-6xl mx-auto px-4 md:px-6 py-8">
+  <main class="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8">
     <div id="timeline" class="relative timeline pl-10 space-y-6"></div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="hidden glass rounded-2xl p-8 text-center text-slate-300">
+      <p class="text-lg mb-2">No matching tasks.</p>
+      <p class="text-sm">Try clearing the search or selecting a different month/goal.</p>
+    </div>
   </main>
 
   <footer class="max-w-6xl mx-auto px-4 md:px-6 pb-12 text-sm text-slate-400">
-    Goals Application. Built with ❤️ using Flask and TailwindCSS.
+    NewTon — AI Powered Scheduler. Built with ❤️ using Flask & TailwindCSS.
   </footer>
+{% endblock %}
 
+{% block body_extra %}
   <!-- Items from Flask -->
   <script>
+    // Expect either:
+    // 1) Array-of-arrays where row 0 is headers: [["id","Goals","prep_phase","month_year","to_do"], [1,...], ...]
+    // 2) Array-of-objects: [{id:1, Goals:"...", prep_phase:"...", month_year:"...", to_do:"..."}, ...]
     const ITEMS = {{ items|tojson|safe if items is defined else '[]' }};
   </script>
 
@@ -148,6 +194,21 @@
       return `<span class="px-2 py-1 rounded-full ${s.badge}">${g}</span>`;
     }).join("");
 
+    // Summary strip (counts)
+    function renderSummary(rows) {
+      const months = unique(rows.map(r => (r.month_year||"").toLowerCase()).filter(Boolean));
+      const goalCounts = rows.reduce((a,r)=>((a[r.Goals]= (a[r.Goals]||0)+1), a), {});
+      const total = rows.length;
+      const parts = [
+        `<span><strong>${total}</strong> tasks</span>`,
+        `<span><strong>${months.length}</strong> months</span>`,
+        `<span><strong>${Object.keys(goalCounts).length}</strong> goals</span>`
+      ];
+      document.getElementById('summaryStrip').innerHTML = `
+        <div class="flex gap-3 items-center">${parts.map(p=>`<span class="px-2 py-1 rounded-lg bg-slate-800/60 border border-slate-700/60">${p}</span>`).join("")}</div>
+      `;
+    }
+
     // ---------- Build & Render ----------
     function buildView(filterGoal="ALL", monthSel="ALL", search="") {
       const s = (search||"").trim().toLowerCase();
@@ -164,6 +225,10 @@
       // Group by month and render only matching (if month filter set)
       const byMonth = groupBy(rows, r=>(r.month_year||"").toLowerCase());
       const keys = sortMonthKeys(Object.keys(byMonth));
+      renderSummary(rows);
+      // show/hide empty state
+      document.getElementById('emptyState').classList.toggle('hidden', rows.length>0);
+
       return keys.map(k=>{
         const items = byMonth[k]||[];
         const byGoal = groupBy(items, it=>it.Goals||"");
@@ -174,14 +239,17 @@
 
     function taskCard(task) {
       const s = STYLE[task.Goals] || { badge:"bg-slate-700/50 border border-slate-600/40 text-slate-200", ring:"ring-slate-600/30", dot:"bg-slate-400" };
+      const phase = task.prep_phase ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/70 border border-slate-700/60">Phase ${task.prep_phase}</span>` : ``;
+      // Optional: id to anchor/link if present
+      const anchor = task.id ? `id="task-${task.id}"` : "";
       return `
-        <div class="glass rounded-xl p-3 ring-1 ${s.ring}">
+        <div ${anchor} class="glass rounded-xl p-3 ring-1 ${s.ring}">
           <div class="flex items-start gap-3">
             <div class="mt-1"><div class="h-2.5 w-2.5 rounded-full ${s.dot}"></div></div>
             <div class="flex-1">
               <div class="flex items-center gap-2 flex-wrap mb-1">
                 <span class="text-xs px-2 py-1 rounded-full ${s.badge}">${task.Goals || "Goal"}</span>
-                ${task.prep_phase ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/70 border border-slate-700/60">Phase ${task.prep_phase}</span>` : ``}
+                ${phase}
               </div>
               <div class="text-sm leading-snug text-slate-100">${task.to_do || ""}</div>
             </div>
@@ -196,7 +264,7 @@
       const head = `
         <div class="flex items-center gap-2">
           <div class="h-3.5 w-3.5 rounded-full ${m.isNow ? 'bg-emerald-400 now-pulse' : 'bg-violet-400'}"></div>
-          <h3 class="text-lg md:text-xl font-semibold">${m.pretty}${nowBadge}</h3>
+          <h3 class="text-lg md:text-xl font-semibold text-slate-100">${m.pretty}${nowBadge}</h3>
         </div>
       `;
       const goalSections = m.goals.map(g=>{
@@ -231,6 +299,8 @@
     // ---------- Wiring ----------
     const searchBox = document.getElementById("searchBox");
     const clearSearch = document.getElementById("clearSearch");
+    const goalFilter = document.getElementById("goalFilter");
+    const monthFilter = document.getElementById("monthFilter");
 
     function applyRender() {
       render(buildView(
@@ -250,5 +320,4 @@
     // Initial render
     applyRender();
   </script>
-</body>
 {% endblock %}

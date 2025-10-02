@@ -3,34 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Schedule — Milk Diary{% endblock %}</title>
+  <title>{% block title %}NewTon — AI Powered Scheduler{% endblock %}</title>
 
   <!-- PWA -->
   <meta name="theme-color" content="#0b84ff" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/static/icons/icon-192.png" sizes="192x192" />
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
-
   <link rel="stylesheet" href="/static/css/app.css" />
 
   <style>
-    /* --- Mobile layout helpers (lightweight, no framework) --- */
     :root {
-      --brand:#0b84ff;
-      --bg:#ffffff;
-      --ink:#0c1117;
-      --muted:#6b7280;
-      --surface:#f6f7fb;
-      --radius:16px;
+      --brand:#0b84ff; --bg:#ffffff; --ink:#0c1117; --muted:#6b7280;
+      --surface:#f6f7fb; --radius:16px;
     }
-    body { background: var(--surface); color: var(--ink); }
+    body { background: var(--surface); color: var(--ink); margin:0; }
     .appbar {
       position: sticky; top: 0; z-index: 40;
       display:flex; align-items:center; gap:.75rem;
       padding:.75rem 1rem; background:var(--bg); box-shadow:0 1px 8px rgba(0,0,0,.06);
     }
-    .brand { display:flex; align-items:center; gap:.5rem; font-weight:700; }
+    .brand { display:flex; align-items:center; gap:.5rem; font-weight:800; letter-spacing:.2px; }
     .brand .dot { width:10px; height:10px; border-radius:999px; background:var(--brand); display:inline-block; }
+    .brand small { color:var(--muted); font-weight:600; }
     .spacer { flex:1; }
     .btn, .menu a {
       display:inline-flex; align-items:center; justify-content:center;
@@ -44,11 +39,7 @@
     .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
     main { margin-top: .5rem; }
 
-    /* Slide-in menu */
-    .backdrop {
-      position: fixed; inset: 0; background: rgba(0,0,0,.4);
-      display: none; z-index: 50;
-    }
+    .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 50; }
     .backdrop.show { display:block; }
     .drawer {
       position: fixed; inset: 0 auto 0 0; width: 80%; max-width: 320px;
@@ -60,39 +51,25 @@
     .menu { display:flex; flex-direction:column; gap:.5rem; }
     .menu a { text-align:left; }
 
-    /* Gate modal */
-    .modal {
-      position: fixed; inset: 0; display: none; place-items: center; z-index: 70;
-      background: rgba(0,0,0,.4);
-    }
+    .modal { position: fixed; inset: 0; display: none; place-items: center; z-index: 70; background: rgba(0,0,0,.4); }
     .modal.show { display: grid; }
-    .card {
-      width:min(92vw, 420px); background:#fff; border-radius: var(--radius);
-      box-shadow:0 10px 30px rgba(0,0,0,.15); padding:1.25rem;
-    }
+    .card { width:min(92vw, 420px); background:#fff; border-radius: var(--radius); box-shadow:0 10px 30px rgba(0,0,0,.15); padding:1.25rem; }
     .card h2 { margin:.25rem 0 .75rem; }
     .field { display:flex; gap:.5rem; }
-    .field input {
-      flex:1; padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:.6rem; outline:none;
-    }
+    .field input { flex:1; padding:.7rem .9rem; border:1px solid #e5e7eb; border-radius:.6rem; outline:none; }
     .note { font-size:.9rem; color: var(--muted); margin-top:.5rem; }
 
-    /* Motivation strip */
     .motivation {
       background: linear-gradient(120deg, rgba(11,132,255,.1), rgba(11,132,255,.05));
       border:1px dashed rgba(11,132,255,.35);
       padding:1rem; border-radius:var(--radius); margin: .75rem 0 1rem;
     }
 
-    /* Bottom actions on small screens */
     @media (max-width: 768px) {
       .actions { display:none; }
-      .fab {
-        position: fixed; right: 16px; bottom: 16px; z-index: 40;
-      }
+      .fab { position: fixed; right: 16px; bottom: 16px; z-index: 40; }
     }
   </style>
-
   {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -100,7 +77,9 @@
   <header class="appbar">
     <button id="menuBtn" class="btn ghost" aria-label="Open menu">☰</button>
     <div class="brand">
-      <span class="dot"></span> <span>Milk Diary</span>
+      <span class="dot"></span>
+      <span>NewTon</span>
+      <small>— AI Scheduler</small>
     </div>
     <div class="spacer"></div>
     <div class="actions">
@@ -114,7 +93,7 @@
   <div id="backdrop" class="backdrop"></div>
   <nav id="drawer" class="drawer" aria-label="Main">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: .5rem;">
-      <div class="brand"><span class="dot"></span><span>Menu</span></div>
+      <div class="brand"><span class="dot"></span><span>NewTon</span></div>
       <button id="closeDrawer" class="btn ghost" aria-label="Close menu">✕</button>
     </div>
     <div class="menu">
@@ -124,11 +103,11 @@
     </div>
   </nav>
 
-  <!-- Gate Modal -->
+  <!-- Code Gate Modal -->
   <div id="gateModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
     <div class="card">
       <h2 id="gateTitle">Enter Access Code</h2>
-      <p class="note">This keeps your schedule private on this device.</p>
+      <p class="note">Unlock NewTon on this device.</p>
       <div class="field">
         <input id="codeInput" type="password" placeholder="Access code" autocomplete="one-time-code" />
         <button id="codeSubmit" class="btn primary">Enter</button>
@@ -139,14 +118,11 @@
 
   <!-- Main -->
   <div class="container">
-    <!-- Motivation block shows on landing -->
     <section id="motivation" class="motivation" style="display:none;">
       <strong id="motivationLine">Consistency beats intensity. Show up today.</strong>
     </section>
 
-    {% block content %}
-    <!-- Page-specific content goes here -->
-    {% endblock %}
+    {% block content %}{% endblock %}
   </div>
 
   <!-- Floating Install on mobile -->
@@ -156,7 +132,7 @@
 
   <script src="/static/js/pwa.js"></script>
   <script>
-    // ---------- Drawer ----------
+    // Drawer
     const drawer = document.getElementById('drawer');
     const backdrop = document.getElementById('backdrop');
     const menuBtn = document.getElementById('menuBtn');
@@ -169,17 +145,14 @@
     closeDrawer?.addEventListener('click', () => toggleDrawer(false));
     backdrop?.addEventListener('click', () => toggleDrawer(false));
 
-    // ---------- Install Buttons (wire to beforeinstallprompt from pwa.js if desired) ----------
+    // Install buttons
     let deferredPromptEvent = null;
     const installButtons = [document.getElementById('installBtn'), document.getElementById('installBtn2'), document.getElementById('installBtn3')].filter(Boolean);
-
-    // Capture event here (some browsers need this in page scope)
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPromptEvent = e;
       installButtons.forEach(b => b.hidden = false);
     });
-
     installButtons.forEach(btn => btn.addEventListener('click', async () => {
       if (!deferredPromptEvent) return;
       deferredPromptEvent.prompt();
@@ -188,10 +161,9 @@
       installButtons.forEach(b => b.hidden = true);
     }));
 
-    // ---------- Code Gate ----------
-    // Set ACCESS_CODE via Flask: render_template(..., access_code='YOURCODE')
+    // Code Gate
     const ACCESS_CODE = "{{ access_code|default('1234') }}";
-    const GATE_KEY = 'md_gate_ok_v1';
+    const GATE_KEY = 'newton_gate_ok_v1';
 
     const gateModal = document.getElementById('gateModal');
     const codeInput = document.getElementById('codeInput');
@@ -201,31 +173,21 @@
     const motivationLine = document.getElementById('motivationLine');
 
     const LINES = [
-      "Consistency beats intensity. Show up today.",
-      "Small steps daily lead to big results.",
-      "Done is better than perfect — keep moving.",
-      "Discipline is choosing what you want most over what you want now.",
-      "Your future self is watching. Don’t skip today."
+      "Consistency compounds — schedule it, ship it.",
+      "Tiny slots daily beat marathon sessions.",
+      "Plan. Act. Review. Repeat.",
+      "Your calendar is your strategy.",
+      "NewTon tip: protect your focus blocks."
     ];
 
-    function pickLine() {
-      motivationLine.textContent = LINES[Math.floor(Math.random()*LINES.length)];
-    }
+    const pickLine = () => motivationLine.textContent = LINES[Math.floor(Math.random()*LINES.length)];
 
     function showGateIfNeeded() {
       const ok = localStorage.getItem(GATE_KEY);
-      if (ok === 'yes') {
-        // Already unlocked
-        motivation.style.display = 'block';
-        pickLine();
-        return;
-      }
+      if (ok === 'yes') { motivation.style.display = 'block'; pickLine(); return; }
       gateModal.classList.add('show');
       setTimeout(() => codeInput?.focus(), 50);
     }
-
-    codeSubmit?.addEventListener('click', tryUnlock);
-    codeInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
 
     function tryUnlock() {
       const val = (codeInput?.value || "").trim();
@@ -240,10 +202,11 @@
       }
     }
 
-    // Run on load
+    codeSubmit?.addEventListener('click', tryUnlock);
+    codeInput?.addEventListener('keydown', (e) => { if (e.key === 'Enter') tryUnlock(); });
+
     window.addEventListener('load', showGateIfNeeded);
   </script>
-
   {% block body_extra %}{% endblock %}
 </body>
 </html>
