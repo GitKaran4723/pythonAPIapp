@@ -1,256 +1,28 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Monthly Goals Timeline</title>
+  <title>Milk Diary</title>
 
-  <!-- Tailwind CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <!-- PWA: theme color shows on Android status bar/splash -->
+  <meta name="theme-color" content="#0b84ff" />
 
-  <style>
-    html, body { background: radial-gradient(1200px 800px at 80% -10%, #1e1b4b 0%, #0b1020 50%, #070b16 100%) fixed; }
-    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
-    .glass { background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.08); }
-    .timeline::before { content:""; position:absolute; left:1rem; top:0; bottom:0; width:3px; background: linear-gradient(180deg, rgba(124,58,237,0.0), rgba(124,58,237,0.6), rgba(59,130,246,0.0)); }
-    .now-pulse { animation: pulse 2s infinite; }
-    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(16,185,129,0.45);} 70%{box-shadow:0 0 0 12px rgba(16,185,129,0);} 100%{box-shadow:0 0 0 0 rgba(16,185,129,0);} }
-  </style>
+  <!-- PWA: manifest & icons -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/static/icons/icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png" />
+
+  <link rel="stylesheet" href="/static/css/app.css" />
 </head>
-<body class="min-h-screen text-slate-100">
-  <!-- Header -->
-  <header class="max-w-6xl mx-auto px-4 md:px-6 pt-8 pb-4">
-    <div class="flex items-start md:items-center gap-4 flex-col md:flex-row">
-      <div class="flex-1">
-        <h1 class="text-3xl md:text-4xl font-bold tracking-tight">📅 Monthly Goals Timeline</h1>
-        <p class="text-slate-300 mt-2">Auto-highlighted for <span id="currentMonthLabel" class="font-semibold text-emerald-300">current month</span>.</p>
-      </div>
-      <div class="flex gap-2">
-        <button id="refreshBtn" class="glass rounded-xl px-4 py-2 text-sm hover:ring-2 ring-violet-500">Refresh</button>
-      </div>
-    </div>
-  </header>
-
-  <!-- Controls -->
-  <section class="max-w-6xl mx-auto px-4 md:px-6">
-    <div class="glass rounded-2xl p-4 md:p-5">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4 items-center">
-        <!-- Goal filter -->
-        <div class="flex gap-3 items-center">
-          <label class="text-sm text-slate-300 shrink-0">Goal</label>
-<select id="goalFilter"
-  class="w-full glass rounded-xl px-3 py-2 text-sm text-slate-100 bg-slate-900/70
-         focus:outline-none focus:ring-2 ring-violet-500">
-</select>        </div>
-
-        <!-- Month filter -->
-        <div class="flex gap-3 items-center">
-          <label class="text-sm text-slate-300 shrink-0">Month</label>
-          <select id="monthFilter" class="w-full glass rounded-xl px-3 py-2 text-sm text-slate-100 bg-slate-900/70
-         focus:outline-none focus:ring-2 ring-violet-500"></select>
-        </div>
-
-        <!-- Search -->
-        <div class="flex items-center gap-3">
-          <input id="searchBox" placeholder="Search tasks…" class="w-full bg-transparent glass rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 ring-violet-500" />
-          <button id="clearSearch" class="hidden text-xs px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-800">Clear</button>
-        </div>
-      </div>
-
-      <!-- Legend (dynamic) -->
-      <div id="legend" class="mt-4 flex flex-wrap gap-2 text-xs"></div>
-    </div>
-  </section>
-
-  <!-- Timeline -->
-  <main class="max-w-6xl mx-auto px-4 md:px-6 py-8">
-    <div id="timeline" class="relative timeline pl-10 space-y-6"></div>
+<body>
+  <main>
+    <h1>Milk Diary</h1>
+    <p>Install me on your phone and use me offline!</p>
+    <button id="install-btn" hidden>Install App</button>
+    <p class="status" id="status"></p>
   </main>
 
-  <footer class="max-w-6xl mx-auto px-4 md:px-6 pb-12 text-sm text-slate-400">
-    Goals Application. Built with ❤️ using Flask and TailwindCSS.
-  </footer>
-
-  <!-- Items from Flask -->
-  <script>
-    const ITEMS = {{ items|tojson|safe if items is defined else '[]' }};
-  </script>
-
-  <script>
-    // ---------- Helpers ----------
-    function coerceItems(items) {
-      if (!Array.isArray(items) || items.length === 0) return [];
-      if (Array.isArray(items[0])) {
-        const headers = items[0];
-        return items.slice(1).map(row => Object.fromEntries(headers.map((h,i)=>[h, row[i]])));
-      }
-      return items;
-    }
-    function unique(arr) { return [...new Set(arr)]; }
-
-    const MONTHS = ["jan","feb","mar","apr","may","jun","jul","aug","sept","oct","nov","dec"];
-    function monthKeyFromDate(d = new Date()) {
-      return `${MONTHS[d.getMonth()]}_${d.getFullYear()}`;
-    }
-    function prettyMonth(key) {
-      if (!key) return "";
-      const [m,y] = key.split("_");
-      const names = {jan:"January",feb:"February",mar:"March",apr:"April",may:"May",jun:"June",jul:"July",aug:"August",sept:"September",oct:"October",nov:"November",dec:"December"};
-      return `${names[m] || m} ${y}`;
-    }
-    function groupBy(arr, fnKey) { return arr.reduce((a,x)=>((a[fnKey(x)] ||= []).push(x), a),{}); }
-    function sortMonthKeys(keys) {
-      const idx = Object.fromEntries(MONTHS.map((m,i)=>[m,i]));
-      return keys.sort((a,b)=>{
-        const [ma,ya]=a.split("_"), [mb,yb]=b.split("_");
-        if (ya!==yb) return (+ya)-(+yb);
-        return (idx[ma] ?? 99) - (idx[mb] ?? 99);
-      });
-    }
-
-    // Color palette (cycles for unlimited goals)
-    const PALETTE = [
-      { badge:"bg-violet-600/20 border border-violet-500/40 text-violet-200", ring:"ring-violet-500/40", dot:"bg-violet-400" },
-      { badge:"bg-sky-600/20 border border-sky-500/40 text-sky-200", ring:"ring-sky-500/40", dot:"bg-sky-400" },
-      { badge:"bg-amber-500/20 border border-amber-400/40 text-amber-100", ring:"ring-amber-400/40", dot:"bg-amber-400" },
-      { badge:"bg-emerald-600/20 border border-emerald-500/40 text-emerald-100", ring:"ring-emerald-500/40", dot:"bg-emerald-400" },
-      { badge:"bg-rose-600/20 border border-rose-500/40 text-rose-100", ring:"ring-rose-500/40", dot:"bg-rose-400" },
-      { badge:"bg-fuchsia-600/20 border border-fuchsia-500/40 text-fuchsia-100", ring:"ring-fuchsia-500/40", dot:"bg-fuchsia-400" },
-      { badge:"bg-cyan-600/20 border border-cyan-500/40 text-cyan-100", ring:"ring-cyan-500/40", dot:"bg-cyan-400" },
-      { badge:"bg-lime-600/20 border border-lime-500/40 text-lime-100", ring:"ring-lime-500/40", dot:"bg-lime-400" },
-    ];
-    function makeStyleMap(goals) {
-      const map = {};
-      goals.forEach((g,i)=>map[g]=PALETTE[i % PALETTE.length]);
-      return map;
-    }
-
-    // ---------- Data prep ----------
-    const RAW = coerceItems(ITEMS);
-    const ALL_GOALS = unique(RAW.map(r=>r.Goals).filter(Boolean));
-    const ALL_MONTHS = sortMonthKeys(unique(RAW.map(r=>(r.month_year||"").toLowerCase()).filter(Boolean)));
-    const STYLE = makeStyleMap(ALL_GOALS);
-    const NOW_KEY = monthKeyFromDate();
-    document.getElementById("currentMonthLabel").textContent = prettyMonth(NOW_KEY);
-
-    // ---------- UI: Filters ----------
-    const goalFilter = document.getElementById("goalFilter");
-    goalFilter.innerHTML = `<option value="ALL">All Goals</option>` + ALL_GOALS.map(g=>`<option value="${g}">${g}</option>`).join("");
-
-    const monthFilter = document.getElementById("monthFilter");
-    monthFilter.innerHTML =
-      `<option value="ALL">All Months</option>` +
-      `<option value="NOW">Current Month (${prettyMonth(NOW_KEY)})</option>` +
-      ALL_MONTHS.map(m=>`<option value="${m}">${prettyMonth(m)}</option>`).join("");
-
-    const legend = document.getElementById("legend");
-    legend.innerHTML = ALL_GOALS.map(g=>{
-      const s = STYLE[g];
-      return `<span class="px-2 py-1 rounded-full ${s.badge}">${g}</span>`;
-    }).join("");
-
-    // ---------- Build & Render ----------
-    function buildView(filterGoal="ALL", monthSel="ALL", search="") {
-      const s = (search||"").trim().toLowerCase();
-      const monthKey = monthSel === "NOW" ? NOW_KEY : monthSel;
-
-      const rows = RAW.filter(r=>{
-        const gOK = filterGoal==="ALL" ? true : r.Goals===filterGoal;
-        const mKey = (r.month_year||"").toLowerCase();
-        const mOK = monthSel==="ALL" ? true : (mKey === monthKey.toLowerCase());
-        const sOK = !s || `${r.to_do||""} ${r.Goals||""} ${r.month_year||""}`.toLowerCase().includes(s);
-        return gOK && mOK && sOK;
-      });
-
-      // Group by month and render only matching (if month filter set)
-      const byMonth = groupBy(rows, r=>(r.month_year||"").toLowerCase());
-      const keys = sortMonthKeys(Object.keys(byMonth));
-      return keys.map(k=>{
-        const items = byMonth[k]||[];
-        const byGoal = groupBy(items, it=>it.Goals||"");
-        const goals = Object.keys(byGoal).map(g=>({goal:g, tasks:byGoal[g]}));
-        return { key:k, pretty:prettyMonth(k), goals, isNow:k===NOW_KEY };
-      });
-    }
-
-    function taskCard(task) {
-      const s = STYLE[task.Goals] || { badge:"bg-slate-700/50 border border-slate-600/40 text-slate-200", ring:"ring-slate-600/30", dot:"bg-slate-400" };
-      return `
-        <div class="glass rounded-xl p-3 ring-1 ${s.ring}">
-          <div class="flex items-start gap-3">
-            <div class="mt-1"><div class="h-2.5 w-2.5 rounded-full ${s.dot}"></div></div>
-            <div class="flex-1">
-              <div class="flex items-center gap-2 flex-wrap mb-1">
-                <span class="text-xs px-2 py-1 rounded-full ${s.badge}">${task.Goals || "Goal"}</span>
-                ${task.prep_phase ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/70 border border-slate-700/60">Phase ${task.prep_phase}</span>` : ``}
-              </div>
-              <div class="text-sm leading-snug text-slate-100">${task.to_do || ""}</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    function monthBlock(m) {
-      const highlight = m.isNow ? "ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/10" : "ring-1 ring-violet-500/30";
-      const nowBadge = m.isNow ? `<span class="now-pulse text-[10px] ml-2 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 border border-emerald-400/40">NOW</span>` : "";
-      const head = `
-        <div class="flex items-center gap-2">
-          <div class="h-3.5 w-3.5 rounded-full ${m.isNow ? 'bg-emerald-400 now-pulse' : 'bg-violet-400'}"></div>
-          <h3 class="text-lg md:text-xl font-semibold">${m.pretty}${nowBadge}</h3>
-        </div>
-      `;
-      const goalSections = m.goals.map(g=>{
-        const s = STYLE[g.goal] || { badge:"bg-slate-700/50 border border-slate-600/40 text-slate-200" };
-        return `
-          <div class="mt-3">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="text-xs px-2 py-1 rounded-full ${s.badge}">${g.goal}</span>
-              <span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/70 border border-slate-700/60">${g.tasks.length} tasks</span>
-            </div>
-            <div class="grid md:grid-cols-2 gap-3">
-              ${g.tasks.map(taskCard).join("")}
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      return `
-        <section class="relative pl-6">
-          <div class="glass rounded-2xl p-4 md:p-5 ${highlight}">
-            ${head}
-            ${goalSections || `<div class="text-slate-400 text-sm mt-2">No tasks for this month.</div>`}
-          </div>
-        </section>
-      `;
-    }
-
-    function render(view) {
-      document.getElementById("timeline").innerHTML = view.map(monthBlock).join("");
-    }
-
-    // ---------- Wiring ----------
-    const searchBox = document.getElementById("searchBox");
-    const clearSearch = document.getElementById("clearSearch");
-
-    function applyRender() {
-      render(buildView(
-        goalFilter.value || "ALL",
-        monthFilter.value || "ALL",
-        searchBox.value || ""
-      ));
-      clearSearch.classList.toggle("hidden", !(searchBox.value||"").length);
-    }
-
-    goalFilter.addEventListener("change", applyRender);
-    monthFilter.addEventListener("change", applyRender);
-    searchBox.addEventListener("input", applyRender);
-    clearSearch.addEventListener("click", ()=>{ searchBox.value=""; applyRender(); });
-    document.getElementById("refreshBtn").addEventListener("click", ()=>location.reload());
-
-    // Initial render
-    applyRender();
-  </script>
+  <script src="/static/js/pwa.js"></script>
 </body>
 </html>

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, send_from_directory, make_response
 from flask_cors import CORS  # 👈 Import CORS
 from dotenv import load_dotenv
 import requests
@@ -8,7 +8,7 @@ from youtube_transcript_api import YouTubeTranscriptApi
 
 load_dotenv()
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app, origins=["https://karanjadhav.tech"])
 
 # API's for various applications
@@ -79,11 +79,35 @@ def fetch_playlist_videos(api_key, playlist_id):
 
     return videos
 
-@app.route("/")
+@app.route("/schedule")
 def home():
     data = requests.get(Schedule_data_script_url, timeout=10).json()
     # data is a 2D array: [["id","Goals","prep_phase","month_year","to_do"], [1, ...], ...]
-    return render_template("index.html", items=data)
+    return render_template("monthly_schedule.html", items=data)
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+# Serve the manifest with the correct MIME type
+@app.route("/manifest.webmanifest")
+def manifest():
+    return send_from_directory(
+        "static",
+        "manifest.webmanifest",
+        mimetype="application/manifest+json",
+    )
+
+# Serve the service worker from the root so it controls the whole site
+@app.route("/sw.js")
+def sw():
+    response = make_response(send_from_directory("static", "sw.js"))
+    # Avoid aggressive caching of the SW itself so updates take effect
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+
     
 genai.configure(api_key=os.getenv("GEMINI_API"))
 model = genai.GenerativeModel("gemini-2.0-flash")
@@ -128,7 +152,6 @@ def get_playlist_videos(playlist_id):
         return jsonify(result), 500
 
     return jsonify(result)
-
 
 
 if __name__ == '__main__':
