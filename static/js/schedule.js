@@ -171,7 +171,7 @@
       }).join("");
 
       return `
-        <section class="relative pl-6">
+        <section class="relative">
           <div class="glass rounded-2xl p-4 md:p-5 ${highlight}">
             ${head}
             ${goalSections || `<div class="text-slate-400 text-sm mt-2">No tasks for this month.</div>`}
@@ -198,6 +198,8 @@
     elSearch?.addEventListener("input", applyRender);
     elClearSearch?.addEventListener("click", ()=>{ if (elSearch) elSearch.value=""; applyRender(); });
     elRefresh?.addEventListener("click", ()=>location.reload());
+
+    
 
     // Initial render
     applyRender();

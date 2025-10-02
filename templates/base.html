@@ -39,15 +39,34 @@
     .container { max-width: 960px; margin: 0 auto; padding: 1rem; }
     main { margin-top: .5rem; }
 
-    .backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: none; z-index: 50; }
-    .backdrop.show { display:block; }
-    .drawer {
-      position: fixed; inset: 0 auto 0 0; width: 80%; max-width: 320px;
-      background:#fff; box-shadow: 2px 0 16px rgba(0,0,0,.12);
-      transform: translateX(-100%); transition: transform .25s ease; z-index: 60;
-      display:flex; flex-direction:column; padding:1rem;
+    /* Backdrop stays constant, no blur/tint shift */
+    .backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.55);
+    display: none; z-index: 50;
     }
+    .backdrop.show { display:block; }
+
+    /* Drawer: solid dark surface so color never changes while scrolling */
+    .drawer {
+    position: fixed; inset: 0 auto 0 0; width: 84%; max-width: 320px;
+    background:#0b1020;           /* solid color */
+    color:#e5e7eb;                 /* slate-200 text */
+    box-shadow: 2px 0 22px rgba(0,0,0,.35);
+    transform: translateX(-100%); transition: transform .25s ease; z-index: 60;
+    display:flex; flex-direction:column; padding:1rem;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+    }
+
+    /* Drawer buttons readable on dark bg */
+    .menu .btn {
+    background: #0f172a;            /* slate-900 */
+    border-color: rgba(255,255,255,.08);
+    color: #e5e7eb;
+    }
+    .menu .btn:active { transform: translateY(1px); }
     .drawer.show { transform: translateX(0); }
+
     .menu { display:flex; flex-direction:column; gap:.5rem; }
     .menu a { text-align:left; }
 
@@ -125,10 +144,6 @@
     {% block content %}{% endblock %}
   </div>
 
-  <!-- Floating Install on mobile -->
-  <div class="fab">
-    <button id="installBtn3" class="btn primary" hidden>Install</button>
-  </div>
 
   <script src="/static/js/pwa.js"></script>
   <script>
