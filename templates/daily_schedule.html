@@ -1,0 +1,119 @@
+{# templates/daily_schedule.html #}
+{% extends "base.html" %}
+{% block title %}Daily Goals — NewTon ({{ view_date }}){% endblock %}
+
+{% block head_extra %}
+  <!-- Same stack as monthly -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/schedule.css">
+  <link rel="stylesheet" href="/static/css/daily.css">
+{% endblock %}
+
+{% block content %}
+<div class="page-wrap pb-20 md:pb-0">  {# leave room for sticky bottom nav on phones #}
+
+  <!-- Header (compact on phones) -->
+  <header class="header-pad">
+    <div class="flex items-start md:items-center gap-3 md:gap-4 flex-col md:flex-row">
+      <div class="flex-1">
+        <h1 class="text-2xl md:text-4xl font-bold tracking-tight">✅ Daily Goals</h1>
+        <p class="text-dim mt-1 md:mt-2">
+          Focus for <span class="font-semibold text-emerald-300">{{ view_date }}</span>.
+          <a href="{{ back_to_month_url or url_for('home') }}" class="underline hover:no-underline">Back to Monthly</a>
+        </p>
+      </div>
+
+      <!-- Desktop date nav -->
+      <nav class="hidden md:flex gap-2">
+        <a href="{{ prev_url }}" class="btn">← Yesterday</a>
+        <a href="{{ today_url }}" class="btn">Today</a>
+        <a href="{{ next_url }}" class="btn">Tomorrow →</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Progress / Motivation -->
+  <section class="section-pad">
+    <div id="motivationCard" class="glass p-3 md:p-5 flex gap-3 md:gap-4 items-center">
+      <div class="progress-wrap shrink-0">
+        <svg viewBox="0 0 36 36" class="progress-ring">
+          <path class="bg" d="M18 2 a 16 16 0 1 1 0 32 a 16 16 0 1 1 0 -32"/>
+          <path id="fgPath" class="fg" d="M18 2 a 16 16 0 1 1 0 32 a 16 16 0 1 1 0 -32" />
+        </svg>
+        <div id="progressPct" class="progress-center">0%</div>
+      </div>
+
+      <div class="grow">
+        <h2 class="text-base md:text-xl font-semibold">Progress</h2>
+        <p class="text-subtle text-xs md:text-sm">Small steps → big wins for UPSC CSE 2026.</p>
+
+        <div class="mt-2 grid grid-cols-3 gap-2 text-center text-xs md:text-sm">
+          <div class="stat-chip">
+            <div id="statTotal" class="stat-val">0</div><div class="stat-label">Total</div>
+          </div>
+          <div class="stat-chip done">
+            <div id="statDone" class="stat-val">0</div><div class="stat-label">Done</div>
+          </div>
+          <div class="stat-chip pending">
+            <div id="statPending" class="stat-val">0</div><div class="stat-label">Pending</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filters (kept minimal; handy on phone) -->
+  <section class="sticky-filters section-pad">
+    <div class="glass p-3 md:p-5">
+      <div class="flex flex-col md:flex-row gap-3 md:items-center">
+        <div class="flex items-center gap-3">
+          <label class="text-sm text-subtle shrink-0">Status</label>
+          <select id="statusFilter" class="select">
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div class="flex-1"></div>
+        <div class="flex items-center gap-3">
+          <input id="searchBox" class="input" placeholder="Search today’s tasks…" />
+          <button id="clearSearch" class="btn text-xs hidden">Clear</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tasks -->
+  <main class="section-pad">
+    <div id="winBanner" class="win">Outstanding! Everything for today is DONE. ✨ Keep the streak alive.</div>
+
+    <div id="taskList" class="space-y-2 md:space-y-3"></div>
+
+    <div id="emptyState" class="hidden glass p-6 text-center">
+      <p class="text-lg mb-1">No tasks for this day.</p>
+      <p class="text-subtle text-sm">Try Yesterday or Tomorrow with the quick nav.</p>
+    </div>
+  </main>
+
+  <footer class="py-6 text-sm text-subtle">
+    NewTon — AI Powered Scheduler. Built with ❤️ using Flask & TailwindCSS.
+  </footer>
+</div>
+
+<!-- Sticky bottom nav (phones) -->
+<nav class="md:hidden daily-bottom-nav glass">
+  <a href="{{ prev_url }}" class="nav-btn">← Yesterday</a>
+  <a href="{{ today_url }}" class="nav-btn nav-today now-pulse">Today</a>
+  <a href="{{ next_url }}" class="nav-btn">Tomorrow →</a>
+</nav>
+{% endblock %}
+
+{% block body_extra %}
+  <script>
+    /* Provided by Flask route */
+    window.ITEMS = {{ items|tojson|safe if items is defined else '[]' }};
+    window.VIEW_DATE = {{ view_date|tojson|safe }};
+  </script>
+  <script src="/static/js/daily.js"></script>
+{% endblock %}

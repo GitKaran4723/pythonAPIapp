@@ -1,89 +1,101 @@
-from flask import Flask, jsonify, request, render_template, send_from_directory, make_response
+from flask import Flask, jsonify, request, render_template, send_from_directory, make_response, url_for, request
 from flask_cors import CORS  # 👈 Import CORS
 from dotenv import load_dotenv
 import requests
 import os
 import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
+from datetime import date, timedelta, datetime
+import pytz
+
+# NEW: import our cache helper
+import sheet_cache
+
+# OPTIONAL: scheduler for hourly refresh inside the web process
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
 
 load_dotenv()
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 CORS(app, origins=["https://karanjadhav.tech"])
 
-# API's for various applications
-
-YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
-YOUTUBE_API_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
-
 Schedule_data_script_url = os.getenv('web_app')
 
-import re
+# ---------- OPTIONAL: start hourly refresh job (Asia/Kolkata) ----------
+scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
+# run at the top of every hour
+scheduler.add_job(lambda: sheet_cache.refresh_cache(Schedule_data_script_url),
+                  trigger="cron", minute=0)
+scheduler.start()
+atexit.register(lambda: scheduler.shutdown(wait=False))
 
-def extract_lesson_number(title):
-    match = re.search(r"L(\d+)", title)
-    return int(match.group(1)) if match else float('inf')  # Put unnumbered titles at the end
+# On startup, try to warm the cache once (non-fatal)
+try:
+    # Only refresh if files not present yet
+    cache = sheet_cache.get_cached_tables()
+    if not cache["Monthly"] and not cache["daily_OCT"]:
+        sheet_cache.refresh_cache(Schedule_data_script_url)
+except Exception as e:
+    app.logger.warning(f"Initial cache refresh failed: {e}")
 
-
-def fetch_playlist_videos(api_key, playlist_id):
-    videos = []
-    next_page_token = ""
-
-    while True:
-        params = {
-            "part": "snippet",
-            "playlistId": playlist_id,
-            "maxResults": 50,
-            "pageToken": next_page_token,
-            "key": api_key
-        }
-
-        response = requests.get(YOUTUBE_API_URL, params=params)
-        data = response.json()
-
-        if "error" in data:
-            return {"error": data["error"]["message"]}
-
-        for item in data.get("items", []):
-            snippet = item.get("snippet", {})
-            title = snippet.get("title", "").lower()
-
-            # 🚫 Skip deleted/private videos
-            if "deleted video" in title or "private video" in title:
-                continue
-
-            thumbnails = snippet.get("thumbnails", {})
-            thumbnail_url = (
-                thumbnails.get("medium", {}).get("url") or
-                thumbnails.get("default", {}).get("url") or
-                thumbnails.get("high", {}).get("url") or
-                ""
-            )
-
-            video = {
-                "title": snippet.get("title", "No Title"),
-                "description": snippet.get("description", ""),
-                "videoId": snippet.get("resourceId", {}).get("videoId", ""),
-                "thumbnail": thumbnail_url,
-                "publishedAt": snippet.get("publishedAt", ""),
-                "channelTitle": snippet.get("channelTitle", "")
-            }
-
-            videos.append(video)
-
-        next_page_token = data.get("nextPageToken")
-        if not next_page_token:
-            break
-
-    videos.sort(key=lambda x: extract_lesson_number(x["title"]))
-
-    return videos
-
+# ---------- ROUTES ----------
 @app.route("/schedule")
 def home():
-    data = requests.get(Schedule_data_script_url, timeout=10).json()
-    # data is a 2D array: [["id","Goals","prep_phase","month_year","to_do"], [1, ...], ...]
-    return render_template("monthly_schedule.html", items=data)
+    """
+    Prefer cached CSVs (fast & resilient). If empty (first boot),
+    we attempt a synchronous refresh once.
+    """
+    data = sheet_cache.get_cached_tables()
+
+    if not data["Monthly"] and not data["daily_OCT"]:
+        try:
+            sheet_cache.refresh_cache(Schedule_data_script_url)
+            data = sheet_cache.get_cached_tables()
+        except Exception as e:
+            app.logger.error(f"Live refresh failed: {e}")
+
+    # if your template currently expects a single 'items', you can pass Monthly
+    # or adjust the template to use both. Example below passes both:
+    return render_template(
+        "monthly_schedule.html",
+        items=data["Monthly"],
+    )
+
+@app.route("/daily")
+def daily():
+    ist = pytz.timezone("Asia/Kolkata")
+    today_ist = datetime.now(ist).date()
+
+    d = request.args.get("d")
+    try:
+        view_date = (datetime.strptime(d, "%Y-%m-%d").date() if d else today_ist).isoformat()
+    except Exception:
+        view_date = today_ist.isoformat()
+
+    # read cached daily csv rows (2D, includes header)
+    tables = sheet_cache.get_cached_tables()
+    daily_rows = tables.get("daily_OCT", [])
+
+    vd = date.fromisoformat(view_date)
+    prev_url = url_for("daily", d=(vd - timedelta(days=1)).isoformat())
+    next_url = url_for("daily", d=(vd + timedelta(days=1)).isoformat())
+    today_url = url_for("daily", d=today_ist.isoformat())
+
+    return render_template(
+        "daily_schedule.html",
+        items=daily_rows,
+        view_date=view_date,
+        prev_url=prev_url,
+        next_url=next_url,
+        today_url=today_url,
+        back_to_month_url=url_for("home")
+    )
+
+# Optional raw JSON for debugging in browser
+@app.route("/schedule.json")
+def schedule_json():
+    return sheet_cache.get_cached_tables()
 
 @app.route("/")
 def index():
