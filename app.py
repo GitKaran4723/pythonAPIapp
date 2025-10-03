@@ -1,19 +1,20 @@
-from flask import Flask, jsonify, request, render_template, send_from_directory, make_response, url_for, request
-from flask_cors import CORS  # 👈 Import CORS
+from flask import Flask, jsonify, request, render_template, send_from_directory, make_response, url_for
+from flask_cors import CORS
 from dotenv import load_dotenv
-import requests
 import os
+import pytz
+from datetime import date, timedelta, datetime
+
+# external deps you already use
+import requests
 import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
-from datetime import date, timedelta, datetime
-import pytz
 
-# NEW: import our cache helper
+# your module
 import sheet_cache
 
-# OPTIONAL: scheduler for hourly refresh inside the web process
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
+# IMPORTANT: do NOT import/start APScheduler at module import time
+# (PythonAnywhere uWSGI has threads disabled)
 
 load_dotenv()
 
@@ -22,19 +23,11 @@ CORS(app, origins=["https://karanjadhav.tech"])
 
 Schedule_data_script_url = os.getenv('web_app')
 
-# ---------- OPTIONAL: start hourly refresh job (Asia/Kolkata) ----------
-scheduler = BackgroundScheduler(timezone="Asia/Kolkata")
-# run at the top of every hour
-scheduler.add_job(lambda: sheet_cache.refresh_cache(Schedule_data_script_url),
-                  trigger="cron", minute=0)
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown(wait=False))
-
-# On startup, try to warm the cache once (non-fatal)
+# ---------- INITIAL (SYNC) WARMUP, OPTIONAL ----------
+# This is safe because it's synchronous and wrapped in try/except.
 try:
-    # Only refresh if files not present yet
     cache = sheet_cache.get_cached_tables()
-    if not cache["Monthly"] and not cache["daily_OCT"]:
+    if not cache.get("Monthly") and not cache.get("daily_OCT"):
         sheet_cache.refresh_cache(Schedule_data_script_url)
 except Exception as e:
     app.logger.warning(f"Initial cache refresh failed: {e}")
@@ -43,23 +36,20 @@ except Exception as e:
 @app.route("/schedule")
 def home():
     """
-    Prefer cached CSVs (fast & resilient). If empty (first boot),
-    we attempt a synchronous refresh once.
+    Prefer cached CSVs. If empty (first boot), try one sync refresh.
     """
     data = sheet_cache.get_cached_tables()
 
-    if not data["Monthly"] and not data["daily_OCT"]:
+    if not data.get("Monthly") and not data.get("daily_OCT"):
         try:
             sheet_cache.refresh_cache(Schedule_data_script_url)
             data = sheet_cache.get_cached_tables()
         except Exception as e:
             app.logger.error(f"Live refresh failed: {e}")
 
-    # if your template currently expects a single 'items', you can pass Monthly
-    # or adjust the template to use both. Example below passes both:
     return render_template(
         "monthly_schedule.html",
-        items=data["Monthly"],
+        items=data.get("Monthly", []),
     )
 
 @app.route("/daily")
@@ -73,7 +63,6 @@ def daily():
     except Exception:
         view_date = today_ist.isoformat()
 
-    # read cached daily csv rows (2D, includes header)
     tables = sheet_cache.get_cached_tables()
     daily_rows = tables.get("daily_OCT", [])
 
@@ -92,7 +81,7 @@ def daily():
         back_to_month_url=url_for("home")
     )
 
-# Optional raw JSON for debugging in browser
+# Optional raw JSON for debugging
 @app.route("/schedule.json")
 def schedule_json():
     return sheet_cache.get_cached_tables()
@@ -101,7 +90,7 @@ def schedule_json():
 def index():
     return render_template("index.html")
 
-# Serve the manifest with the correct MIME type
+# Serve the manifest with correct MIME
 @app.route("/manifest.webmanifest")
 def manifest():
     return send_from_directory(
@@ -110,11 +99,10 @@ def manifest():
         mimetype="application/manifest+json",
     )
 
-# Serve the service worker from the root so it controls the whole site
+# Service worker from root
 @app.route("/sw.js")
 def sw():
     response = make_response(send_from_directory("static", "sw.js"))
-    # Avoid aggressive caching of the SW itself so updates take effect
     response.headers["Cache-Control"] = "no-cache"
     return response
 
@@ -122,26 +110,23 @@ def sw():
 def inject_access_code():
     return {"access_code": os.getenv("APP_ACCESS_CODE", "1234")}
 
-
-    
+# --------- GENAI ENDPOINTS ----------
 genai.configure(api_key=os.getenv("GEMINI_API"))
 model = genai.GenerativeModel("gemini-2.0-flash")
 
 @app.route("/api/ask", methods=["POST"])
 def ask():
-    data = request.json
+    data = request.json or {}
     mode = data.get("mode")
     prompt = data.get("prompt")
 
     try:
         if mode == "video":
-            video_id = prompt.strip().split("v=")[-1].split("&")[0]
+            video_id = (prompt or "").strip().split("v=")[-1].split("&")[0]
             transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
             transcript = " ".join([t["text"] for t in transcript_list])
-            query = f"Make detailed notes from this YouTube video transcript:{transcript}"
+            query = f"Make detailed notes from this YouTube video transcript: {transcript}"
         elif mode == "notes":
-            # Placeholder for markdown-based RAG (simple context-based)
-            # You can replace this with actual vector search in future
             query = f"Answer this using study notes: {prompt}"
         elif mode == "general":
             query = prompt
@@ -154,20 +139,35 @@ def ask():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/playlist/aptitude/<playlist_id>', methods=['GET'])
-def get_playlist_videos(playlist_id):
-    print(playlist_id)
-    
-    if not playlist_id:
-        return jsonify({"error": "Missing playlistId in URL path"}), 400
+# Optional: manual refresh endpoint (guarded by token)
+@app.route("/admin/refresh")
+def admin_refresh():
+    token = request.args.get("t")
+    if token != os.getenv("ADMIN_TOKEN", "dev"):
+        return "Forbidden", 403
+    try:
+        sheet_cache.refresh_cache(Schedule_data_script_url)
+        return "OK"
+    except Exception as e:
+        app.logger.exception("Manual refresh failed")
+        return f"Error: {e}", 500
 
-    result = fetch_playlist_videos(YOUTUBE_API_KEY, playlist_id)
 
-    if isinstance(result, dict) and result.get("error"):
-        return jsonify(result), 500
-
-    return jsonify(result)
-
-
+# ---------- DEV-ONLY BACKGROUND SCHEDULER ----------
+# This runs ONLY when launched as `python app.py` (local dev),
+# not under PythonAnywhere's uWSGI import.
 if __name__ == '__main__':
+    # Optional dev scheduler (safe locally; NOT used on PythonAnywhere)
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        import atexit
+
+        scheduler = BackgroundScheduler(timezone="Asia/Kolkata", daemon=True)
+        scheduler.add_job(lambda: sheet_cache.refresh_cache(Schedule_data_script_url),
+                          trigger="cron", minute=0)
+        scheduler.start()
+        atexit.register(lambda: scheduler.shutdown(wait=False))
+    except Exception as e:
+        print(f"[DEV] Scheduler not started: {e}")
+
     app.run(debug=True)
