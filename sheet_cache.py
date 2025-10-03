@@ -49,13 +49,42 @@ def _session_with_retries() -> requests.Session:
 
 # ------------ File I/O ------------
 def _atomic_write_csv(path: str, rows_2d: List[List[Any]]) -> None:
-    """Write a CSV atomically so readers never see partial files."""
-    with tempfile.NamedTemporaryFile(delete=False, mode="w", newline="", encoding="utf-8") as tmp:
-        writer = csv.writer(tmp)
-        for row in rows_2d:
-            writer.writerow(row)
-        tmp_name = tmp.name
-    os.replace(tmp_name, path)
+    """
+    Write a CSV atomically so readers never see partial files.
+
+    IMPORTANT: Create the temp file in the SAME directory as the destination
+    to avoid cross-device link errors on platforms like PythonAnywhere.
+    """
+    dest_dir = os.path.dirname(os.path.abspath(path))
+    os.makedirs(dest_dir, exist_ok=True)
+
+    tmp_name = None
+    try:
+        # Create temp file in destination directory (same filesystem)
+        with tempfile.NamedTemporaryFile(
+            delete=False,
+            mode="w",
+            newline="",
+            encoding="utf-8",
+            dir=dest_dir,
+            prefix=".tmp_",
+        ) as tmp:
+            writer = csv.writer(tmp)
+            for row in rows_2d:
+                writer.writerow(row)
+            tmp.flush()
+            os.fsync(tmp.fileno())
+            tmp_name = tmp.name
+
+        # Atomic replace within same FS
+        os.replace(tmp_name, path)
+        tmp_name = None  # prevent cleanup below
+    finally:
+        if tmp_name and os.path.exists(tmp_name):
+            try:
+                os.remove(tmp_name)
+            except Exception:
+                pass
 
 
 def read_csv(path: str) -> List[List[str]]:
