@@ -64,7 +64,30 @@ def daily():
         view_date = today_ist.isoformat()
 
     tables = sheet_cache.get_cached_tables()
+    monthly_rows = tables.get("Monthly", [])
     daily_rows = tables.get("daily_OCT", [])
+
+    # Assume first row is header
+    monthly_header, monthly_data = monthly_rows[0], monthly_rows[1:]
+    daily_header, daily_data = daily_rows[0], daily_rows[1:]
+
+    # Get index positions
+    idx_id = monthly_header.index("id")
+    idx_todo = monthly_header.index("to_do")
+
+    # Map {id: to_do}
+    monthly_lookup = {row[idx_id]: row[idx_todo] for row in monthly_data}
+
+    idx_mtid = daily_header.index("monthly_task_id")
+
+    # Build a new daily table with "monthly_task_id" replaced by to_do
+    daily_with_names = [daily_header[:idx_mtid] + ["monthly_task"] + daily_header[idx_mtid+1:]]  # new header   
+
+    for row in daily_data:
+        mtid = row[idx_mtid]
+        todo = monthly_lookup.get(mtid, f"[Missing task {mtid}]")
+        new_row = row[:idx_mtid] + [todo] + row[idx_mtid+1:]
+        daily_with_names.append(new_row)    
 
     vd = date.fromisoformat(view_date)
     prev_url = url_for("daily", d=(vd - timedelta(days=1)).isoformat())
@@ -73,7 +96,7 @@ def daily():
 
     return render_template(
         "daily_schedule.html",
-        items=daily_rows,
+        items=daily_with_names,
         view_date=view_date,
         prev_url=prev_url,
         next_url=next_url,
