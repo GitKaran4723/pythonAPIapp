@@ -106,7 +106,7 @@
       meta.innerHTML = `
         <span class="badge ${done ? "done":"pending"}">${done ? "Finished" : "Pending"}</span>
         <span class="badge">Week ${it.week_no || "-"}</span>
-        <span class="badge">Goal ${it.monthly_task_id || "-"}</span>
+        <span class="badge">Goal: ${it.monthly_task_id || "-"}</span>
       `;
 
       left.appendChild(title);

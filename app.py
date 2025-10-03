@@ -53,6 +53,7 @@ def home():
     )
 
 @app.route("/daily")
+@app.route("/daily")
 def daily():
     ist = pytz.timezone("Asia/Kolkata")
     today_ist = datetime.now(ist).date()
@@ -64,31 +65,82 @@ def daily():
         view_date = today_ist.isoformat()
 
     tables = sheet_cache.get_cached_tables()
-    monthly_rows = tables.get("Monthly", [])
     daily_rows = tables.get("daily_OCT", [])
+    monthly_rows = tables.get("Monthly", [])
 
-    # Assume first row is header
-    monthly_header, monthly_data = monthly_rows[0], monthly_rows[1:]
+    # If either is empty, still render gracefully
+    if not daily_rows or not monthly_rows:
+        vd = date.fromisoformat(view_date)
+        prev_url = url_for("daily", d=(vd - timedelta(days=1)).isoformat())
+        next_url = url_for("daily", d=(vd + timedelta(days=1)).isoformat())
+        today_url = url_for("daily", d=today_ist.isoformat())
+        return render_template(
+            "daily_schedule.html",
+            items=daily_rows,
+            view_date=view_date,
+            prev_url=prev_url,
+            next_url=next_url,
+            today_url=today_url,
+            back_to_month_url=url_for("home")
+        )
+
+    # Split header/data
     daily_header, daily_data = daily_rows[0], daily_rows[1:]
+    monthly_header, monthly_data = monthly_rows[0], monthly_rows[1:]
 
-    # Get index positions
-    idx_id = monthly_header.index("id")
-    idx_todo = monthly_header.index("to_do")
+    # Build monthly lookup {id -> to_do}
+    try:
+        m_idx_id = monthly_header.index("id")
+        m_idx_todo = monthly_header.index("to_do")
+    except ValueError:
+        # Fallback if headers missing
+        m_idx_id = None
+        m_idx_todo = None
 
-    # Map {id: to_do}
-    monthly_lookup = {row[idx_id]: row[idx_todo] for row in monthly_data}
+    monthly_lookup = {}
+    if m_idx_id is not None and m_idx_todo is not None:
+        for r in monthly_data:
+            if m_idx_id < len(r) and m_idx_todo < len(r):
+                monthly_lookup[r[m_idx_id]] = r[m_idx_todo]
 
-    idx_mtid = daily_header.index("monthly_task_id")
+    # Prepare new daily table:
+    # 1) Replace "monthly_task_id" with the "to_do" string
+    # 2) (Optionally) filter rows by selected date
+    try:
+        d_idx_mtid = daily_header.index("monthly_task_id")
+    except ValueError:
+        d_idx_mtid = None
 
-    # Build a new daily table with "monthly_task_id" replaced by to_do
-    daily_with_names = [daily_header[:idx_mtid] + ["monthly_task"] + daily_header[idx_mtid+1:]]  # new header   
+    try:
+        d_idx_date = daily_header.index("Date")
+    except ValueError:
+        d_idx_date = None
+
+    # New header: swap "monthly_task_id" -> "monthly_task"
+    if d_idx_mtid is not None:
+        new_header = daily_header[:d_idx_mtid] + ["monthly_task"] + daily_header[d_idx_mtid+1:]
+    else:
+        new_header = daily_header[:]  # unchanged
+
+    daily_with_names = [new_header]
 
     for row in daily_data:
-        mtid = row[idx_mtid]
-        todo = monthly_lookup.get(mtid, f"[Missing task {mtid}]")
-        new_row = row[:idx_mtid] + [todo] + row[idx_mtid+1:]
-        daily_with_names.append(new_row)    
+        # Filter by date (only if Date column exists)
+        if d_idx_date is not None and d_idx_date < len(row):
+            if (row[d_idx_date] or "")[:10] != view_date:
+                continue
 
+        new_row = list(row)
+
+        # Replace monthly_task_id with to_do
+        if d_idx_mtid is not None and d_idx_mtid < len(new_row):
+            mtid = new_row[d_idx_mtid]
+            todo = monthly_lookup.get(mtid, f"[Missing task {mtid}]")
+            new_row = new_row[:d_idx_mtid] + [todo] + new_row[d_idx_mtid+1:]
+
+        daily_with_names.append(new_row)
+
+    # Navigation URLs
     vd = date.fromisoformat(view_date)
     prev_url = url_for("daily", d=(vd - timedelta(days=1)).isoformat())
     next_url = url_for("daily", d=(vd + timedelta(days=1)).isoformat())
@@ -103,6 +155,8 @@ def daily():
         today_url=today_url,
         back_to_month_url=url_for("home")
     )
+
+
 
 # Optional raw JSON for debugging
 @app.route("/schedule.json")

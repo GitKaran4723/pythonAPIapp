@@ -3,7 +3,7 @@ import os
 import csv
 import json
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Tuple, Optional
 
 import pytz
@@ -25,7 +25,7 @@ TIMEOUT_SECS = 20
 RETRY_TOTAL = 3
 RETRY_BACKOFF = 0.5  # seconds
 
-# Timezone for stamps
+# Timezone for stamps and normalization
 IST = pytz.timezone("Asia/Kolkata")
 
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -50,17 +50,14 @@ def _session_with_retries() -> requests.Session:
 # ------------ File I/O ------------
 def _atomic_write_csv(path: str, rows_2d: List[List[Any]]) -> None:
     """
-    Write a CSV atomically so readers never see partial files.
-
-    IMPORTANT: Create the temp file in the SAME directory as the destination
-    to avoid cross-device link errors on platforms like PythonAnywhere.
+    Atomically write CSV so readers never see partial files.
+    Create temp in the SAME directory to avoid cross-device link errors.
     """
     dest_dir = os.path.dirname(os.path.abspath(path))
     os.makedirs(dest_dir, exist_ok=True)
 
     tmp_name = None
     try:
-        # Create temp file in destination directory (same filesystem)
         with tempfile.NamedTemporaryFile(
             delete=False,
             mode="w",
@@ -76,9 +73,8 @@ def _atomic_write_csv(path: str, rows_2d: List[List[Any]]) -> None:
             os.fsync(tmp.fileno())
             tmp_name = tmp.name
 
-        # Atomic replace within same FS
         os.replace(tmp_name, path)
-        tmp_name = None  # prevent cleanup below
+        tmp_name = None
     finally:
         if tmp_name and os.path.exists(tmp_name):
             try:
@@ -93,6 +89,62 @@ def read_csv(path: str) -> List[List[str]]:
         return []
     with open(path, "r", newline="", encoding="utf-8") as f:
         return list(csv.reader(f))
+
+
+# ------------ Normalization helpers ------------
+def _to_ist_date_str(value: str) -> str:
+    """
+    Convert an incoming date string to IST date (YYYY-MM-DD).
+    Handles:
+      - 'YYYY-MM-DD' (returns as-is)
+      - ISO datetimes like 'YYYY-MM-DDTHH:MM:SSZ' or with offsets
+      - Naive datetimes (assumed UTC)
+    """
+    if not value:
+        return ""
+
+    s = value.strip()
+
+    # Already a plain date?
+    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+        return s
+
+    # Normalize Z to +00:00 for fromisoformat
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+
+    try:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(IST).date().isoformat()
+    except Exception:
+        if len(value) >= 10 and value[4] == "-" and value[7] == "-":
+            return value[:10]
+        return value
+
+
+def _normalize_daily_dates(daily_rows: List[List[Any]]) -> List[List[Any]]:
+    """
+    Given daily rows (header + data), return a new list where 'Date'
+    is normalized to IST (YYYY-MM-DD). If header missing, return unchanged.
+    """
+    if not daily_rows:
+        return daily_rows
+
+    header = daily_rows[0]
+    try:
+        date_idx = header.index("Date")
+    except ValueError:
+        return daily_rows
+
+    out = [header]
+    for row in daily_rows[1:]:
+        new_row = list(row)
+        if date_idx < len(new_row):
+            new_row[date_idx] = _to_ist_date_str(new_row[date_idx])
+        out.append(new_row)
+    return out
 
 
 # ------------ Core Logic ------------
@@ -129,15 +181,19 @@ def validate_payload(payload: Dict[str, Any]) -> Tuple[List[List[Any]], List[Lis
 
 def refresh_cache(url: Optional[str] = None) -> str:
     """
-    Fetch from Apps Script, validate, and write CSVs atomically.
+    Fetch from Apps Script, validate, normalize, and write CSVs atomically.
     Returns an ISO timestamp (IST) of when the cache was updated.
     """
     payload = fetch_json(url)
     monthly, daily = validate_payload(payload)
+
+    # Normalize daily 'Date' to IST yyyy-mm-dd
+    daily = _normalize_daily_dates(daily)
+
     _atomic_write_csv(MONTHLY_CSV, monthly)
     _atomic_write_csv(DAILY_CSV, daily)
+
     stamp = datetime.now(IST).isoformat()
-    # Also write a small metadata file for debugging/monitoring
     with open(os.path.join(DATA_DIR, "meta.json"), "w", encoding="utf-8") as f:
         json.dump({"updated_at_ist": stamp}, f, ensure_ascii=False)
     return stamp
@@ -156,7 +212,6 @@ def get_cached_tables() -> Dict[str, List[List[str]]]:
 
 # ------------ CLI Support (optional) ------------
 if __name__ == "__main__":
-    # Allows: python sheet_cache.py  -> refresh now (useful for cron)
     try:
         ts = refresh_cache()
         print(f"Cache updated at {ts}")
