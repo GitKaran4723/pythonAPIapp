@@ -69,12 +69,17 @@ def init_db():
         
         # Create task completions table to track user-marked completions
         # This persists across Google Sheets refreshes
+        # For daily tasks: tracks first_read, notes, revision (3 stages)
+        # For monthly tasks: uses completed field (single stage)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS task_completions (
                 task_id TEXT PRIMARY KEY,
                 task_type TEXT NOT NULL,
-                completed INTEGER NOT NULL DEFAULT 1,
-                completed_at TEXT NOT NULL,
+                completed INTEGER NOT NULL DEFAULT 0,
+                first_read INTEGER NOT NULL DEFAULT 0,
+                notes INTEGER NOT NULL DEFAULT 0,
+                revision INTEGER NOT NULL DEFAULT 0,
+                completed_at TEXT,
                 month_year TEXT
             )
         """)
@@ -278,9 +283,19 @@ def get_cached_tables() -> Dict[str, List[List[str]]]:
         with get_db_connection() as conn:
             cursor = conn.cursor()
             
-            # Fetch completion status
-            cursor.execute("SELECT task_id, completed FROM task_completions")
-            completions = {row[0]: row[1] for row in cursor.fetchall()}
+            # Fetch completion status (includes three stages for daily tasks)
+            cursor.execute("""
+                SELECT task_id, completed, first_read, notes, revision 
+                FROM task_completions
+            """)
+            completions = {
+                row[0]: {
+                    'completed': row[1],
+                    'first_read': row[2],
+                    'notes': row[3],
+                    'revision': row[4]
+                } for row in cursor.fetchall()
+            }
             
             # Fetch monthly data
             cursor.execute("SELECT row_data FROM monthly_schedule ORDER BY id")
@@ -306,12 +321,11 @@ def get_cached_tables() -> Dict[str, List[List[str]]]:
     }
 
 
-def _merge_completion_status(rows: List[List[Any]], completions: Dict[str, int], task_type: str) -> List[List[Any]]:
+def _merge_completion_status(rows: List[List[Any]], completions: Dict[str, Dict], task_type: str) -> List[List[Any]]:
     """
     Merge local completion status with sheet data.
-    Updates the Status column based on local completions.
-    IMPORTANT: Only marks as 'done' if task_id is in completions AND completed=1
-    Otherwise, preserves original status or sets to empty/pending.
+    For daily tasks: Adds first_read, notes, revision columns
+    For monthly tasks: Updates Status column based on completed field
     """
     if not rows:
         return rows
@@ -324,32 +338,61 @@ def _merge_completion_status(rows: List[List[Any]], completions: Dict[str, int],
     except (ValueError, AttributeError):
         return rows
     
-    result = [header]
+    # For daily tasks, add three-stage columns to header
+    if task_type == "daily":
+        new_header = list(header)
+        if "first_read" not in new_header:
+            new_header.extend(["first_read", "notes", "revision"])
+        result = [new_header]
+    else:
+        result = [header]
     
     for row in rows[1:]:
         new_row = list(row)
         if id_idx < len(new_row):
             task_id = f"{task_type}_{new_row[id_idx]}"
             
-            # Check if this task has a local completion record
-            if task_id in completions and completions[task_id] == 1:
-                # Task is completed locally - mark as done
+            if task_type == "daily":
+                # For daily tasks: add three-stage completion data
+                completion_data = completions.get(task_id, {
+                    'first_read': 0,
+                    'notes': 0,
+                    'revision': 0
+                })
+                
+                # Extend row with three-stage data
+                if len(new_row) == len(header):
+                    new_row.extend([
+                        completion_data.get('first_read', 0),
+                        completion_data.get('notes', 0),
+                        completion_data.get('revision', 0)
+                    ])
+                
+                # Update Status based on completion (all three stages done = done)
                 if status_idx is not None and status_idx < len(new_row):
-                    new_row[status_idx] = "done"
-                elif status_idx is None:
-                    # If Status column doesn't exist, add it
-                    if len(header) == len(new_row):
-                        new_row.append("done")
+                    if (completion_data.get('first_read', 0) == 1 and 
+                        completion_data.get('notes', 0) == 1 and 
+                        completion_data.get('revision', 0) == 1):
+                        new_row[status_idx] = "done"
+                    else:
+                        new_row[status_idx] = "Pending"
             else:
-                # Task is NOT in completions or is marked as incomplete
-                # Ensure it's not showing as done (reset to original or pending)
-                if status_idx is not None and status_idx < len(new_row):
-                    original_status = str(new_row[status_idx]).lower().strip()
-                    # If original status says done but we don't have a completion record, reset it
-                    if original_status in ["done", "completed", "finished", "1", "true"]:
-                        # Check if it's from the sheet or local - if not in completions, reset to pending
+                # For monthly tasks: use single completed field
+                if task_id in completions and completions[task_id].get('completed') == 1:
+                    # Task is completed locally - mark as done
+                    if status_idx is not None and status_idx < len(new_row):
+                        new_row[status_idx] = "done"
+                    elif status_idx is None:
+                        # If Status column doesn't exist, add it
+                        if len(header) == len(new_row):
+                            new_row.append("done")
+                else:
+                    # Task is NOT in completions or is marked as incomplete
+                    if status_idx is not None and status_idx < len(new_row):
                         if task_id not in completions:
-                            new_row[status_idx] = "Pending"
+                            original_status = str(new_row[status_idx]).lower().strip()
+                            if original_status in ["done", "completed", "finished", "1", "true"]:
+                                new_row[status_idx] = "Pending"
             
         result.append(new_row)
     
@@ -358,7 +401,7 @@ def _merge_completion_status(rows: List[List[Any]], completions: Dict[str, int],
 
 def mark_task_complete(task_id: str, task_type: str, completed: bool = True, month_year: str = None) -> bool:
     """
-    Mark a task as complete or incomplete.
+    Mark a task as complete or incomplete (for monthly tasks).
     Returns True if successful, False otherwise.
     """
     init_db()
@@ -371,8 +414,8 @@ def mark_task_complete(task_id: str, task_type: str, completed: bool = True, mon
             if completed:
                 cursor.execute("""
                     INSERT OR REPLACE INTO task_completions 
-                    (task_id, task_type, completed, completed_at, month_year)
-                    VALUES (?, ?, ?, ?, ?)
+                    (task_id, task_type, completed, first_read, notes, revision, completed_at, month_year)
+                    VALUES (?, ?, ?, 0, 0, 0, ?, ?)
                 """, (task_id, task_type, 1, completed_at, month_year))
             else:
                 # If uncompleting, remove from completions
@@ -384,6 +427,57 @@ def mark_task_complete(task_id: str, task_type: str, completed: bool = True, mon
             return True
     except Exception as e:
         print(f"Error marking task complete: {e}")
+        return False
+
+
+def mark_task_stage(task_id: str, task_type: str, stage: str, completed: bool = True, month_year: str = None) -> bool:
+    """
+    Mark a specific stage of a task (first_read, notes, or revision) as complete or incomplete.
+    For daily tasks only.
+    Returns True if successful, False otherwise.
+    """
+    init_db()
+    
+    if stage not in ['first_read', 'notes', 'revision']:
+        print(f"Invalid stage: {stage}")
+        return False
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            completed_at = datetime.now(IST).isoformat()
+            
+            # Check if task exists
+            cursor.execute("SELECT * FROM task_completions WHERE task_id = ?", (task_id,))
+            existing = cursor.fetchone()
+            
+            if existing:
+                # Update existing record
+                cursor.execute(f"""
+                    UPDATE task_completions 
+                    SET {stage} = ?, completed_at = ?
+                    WHERE task_id = ?
+                """, (1 if completed else 0, completed_at, task_id))
+            else:
+                # Create new record
+                stages = {
+                    'first_read': 0,
+                    'notes': 0,
+                    'revision': 0
+                }
+                stages[stage] = 1 if completed else 0
+                
+                cursor.execute("""
+                    INSERT INTO task_completions 
+                    (task_id, task_type, completed, first_read, notes, revision, completed_at, month_year)
+                    VALUES (?, ?, 0, ?, ?, ?, ?, ?)
+                """, (task_id, task_type, stages['first_read'], stages['notes'], 
+                      stages['revision'], completed_at, month_year))
+            
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Error marking task stage: {e}")
         return False
 
 
@@ -417,6 +511,81 @@ def get_completion_stats(month_year: str = None) -> Dict[str, int]:
     except Exception as e:
         print(f"Error getting completion stats: {e}")
         return {"completed": 0}
+
+
+def get_task_progress(date: str = None) -> Dict[str, Any]:
+    """
+    Get progress statistics for daily tasks.
+    Calculates percentage based on: (completed_stages / total_stages) * 100
+    Where total_stages = num_tasks * 3 (first_read, notes, revision)
+    
+    Args:
+        date: Optional date filter (yyyy-mm-dd format)
+    
+    Returns:
+        Dict with total_tasks, total_stages, completed_stages, percentage
+    """
+    init_db()
+    
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get total tasks for the date
+            if date:
+                cursor.execute("""
+                    SELECT COUNT(*) FROM daily_schedule 
+                    WHERE date = ?
+                """, (date,))
+            else:
+                cursor.execute("SELECT COUNT(*) FROM daily_schedule")
+            
+            total_tasks = cursor.fetchone()[0]
+            
+            # Header row counts as one, so subtract it
+            if total_tasks > 0:
+                total_tasks -= 1
+            
+            total_stages = total_tasks * 3  # Each task has 3 stages
+            
+            # Get completed stages
+            if date:
+                cursor.execute("""
+                    SELECT SUM(first_read) + SUM(notes) + SUM(revision) 
+                    FROM task_completions tc
+                    WHERE tc.task_type = 'daily'
+                    AND tc.task_id IN (
+                        SELECT 'daily_' || json_extract(row_data, '$[0]')
+                        FROM daily_schedule
+                        WHERE date = ?
+                    )
+                """, (date,))
+            else:
+                cursor.execute("""
+                    SELECT SUM(first_read) + SUM(notes) + SUM(revision) 
+                    FROM task_completions 
+                    WHERE task_type = 'daily'
+                """)
+            
+            completed_stages = cursor.fetchone()[0] or 0
+            
+            # Calculate percentage
+            percentage = (completed_stages / total_stages * 100) if total_stages > 0 else 0
+            
+            return {
+                "total_tasks": total_tasks,
+                "total_stages": total_stages,
+                "completed_stages": completed_stages,
+                "percentage": round(percentage, 2)
+            }
+    except Exception as e:
+        print(f"Error getting task progress: {e}")
+        return {
+            "total_tasks": 0,
+            "total_stages": 0,
+            "completed_stages": 0,
+            "percentage": 0
+        }
 
 
 # ------------ CLI Support (optional) ------------

@@ -108,6 +108,81 @@
 }
 .win.show{ display:block; }
 
+/* Three-stage buttons container */
+.stage-buttons-container {
+  display: flex;
+  align-items: center;
+  justify-content: stretch;
+  width: 100%;
+}
+
+/* Three-stage buttons wrapper */
+.stage-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Desktop: horizontal layout */
+@media (min-width: 768px) {
+  .stage-buttons-container {
+    justify-content: flex-end;
+    width: auto;
+  }
+  
+  .stage-buttons {
+    flex-direction: row;
+    gap: 6px;
+    width: auto;
+  }
+}
+
+/* Stage button base styles */
+.stage-btn {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  min-width: fit-content;
+  font-family: inherit;
+}
+
+.stage-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.stage-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.stage-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Pending state - Yellow */
+.stage-btn.pending {
+  background: #f59e0b;
+  color: #1f2937;
+}
+
+.stage-btn.pending:hover:not(:disabled) {
+  background: #fbbf24;
+}
+
+/* Completed state - Green */
+.stage-btn.completed {
+  background: #10b981;
+  color: white;
+}
+
+.stage-btn.completed:hover:not(:disabled) {
+  background: #34d399;
+}
+
 /* Mobile-specific improvements */
 @media (max-width: 767px) {
   .task {
@@ -127,6 +202,14 @@
   .badge {
     padding: 4px 10px;
     font-size: 11px;
+  }
+  
+  /* Full width stage buttons on mobile */
+  .stage-btn {
+    width: 100%;
+    padding: 12px 16px !important;
+    font-size: 0.875rem !important;
+    justify-content: center;
   }
 }
 

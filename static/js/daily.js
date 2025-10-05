@@ -30,13 +30,23 @@
     if (!rows.length) return [];
     const hasHeader = rows[0] && rows[0][0] === "id";
     const dataRows = hasHeader ? rows.slice(1) : rows;
+    
+    // Find indices for three-stage columns
+    const header = rows[0];
+    const firstReadIdx = header.indexOf("first_read");
+    const notesIdx = header.indexOf("notes");
+    const revisionIdx = header.indexOf("revision");
+    
     return dataRows.map(r => ({
       id: r[0],
       monthly_task_id: r[1],
       week_no: r[2],
       date_iso: r[3],
       task_name: r[4] || "",
-      status_raw: r[5] || ""
+      status_raw: r[5] || "",
+      first_read: firstReadIdx >= 0 ? (r[firstReadIdx] === 1) : false,
+      notes: notesIdx >= 0 ? (r[notesIdx] === 1) : false,
+      revision: revisionIdx >= 0 ? (r[revisionIdx] === 1) : false
     }));
   }
 
@@ -68,29 +78,42 @@
   }
 
   function renderStats(source) {
-    const total = source.length;
-    const done = source.filter(it => isDoneVal(it.status_raw)).length;
-    const pending = total - done;
+    const totalTasks = source.length;
+    const totalStages = totalTasks * 3; // Each task has 3 stages
+    
+    // Count completed stages
+    let completedStages = 0;
+    source.forEach(it => {
+      if (it.first_read) completedStages++;
+      if (it.notes) completedStages++;
+      if (it.revision) completedStages++;
+    });
+    
+    // Count fully done tasks (all 3 stages completed)
+    const fullyDone = source.filter(it => it.first_read && it.notes && it.revision).length;
+    const pending = totalTasks - fullyDone;
 
-    statTotal.textContent = total;
-    statDone.textContent = done;
+    statTotal.textContent = totalTasks;
+    statDone.textContent = fullyDone;
     statPending.textContent = pending;
 
-    const pct = total ? Math.round((done / total) * 100) : 0;
+    // Percentage based on completed stages / total stages
+    const pct = totalStages ? Math.round((completedStages / totalStages) * 100) : 0;
     progressPct.textContent = pct + "%";
     fgPath.style.strokeDashoffset = String(100 - pct);
     winBanner.classList.toggle("show", pct === 100);
   }
 
-  async function toggleTaskCompletion(taskId, currentDone) {
+  async function toggleTaskStage(taskId, stage, currentState) {
     try {
-      const response = await fetch('/api/task/complete', {
+      const response = await fetch('/api/task/stage', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           task_id: taskId,
           task_type: 'daily',
-          completed: !currentDone,
+          stage: stage,
+          completed: !currentState,
           month_year: null
         })
       });
@@ -107,6 +130,29 @@
     }
   }
 
+  function createStageButton(stage, isCompleted, taskId, label) {
+    const btn = document.createElement("button");
+    
+    if (isCompleted) {
+      // Completed state: Green button
+      btn.className = "stage-btn completed px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm flex items-center justify-center gap-1";
+      btn.innerHTML = `<span class="text-sm">✓</span> ${label}`;
+    } else {
+      // Pending state: Yellow button
+      btn.className = "stage-btn pending px-3 py-2 md:py-1.5 rounded-lg text-xs font-semibold bg-yellow-500 hover:bg-yellow-400 text-gray-900 transition-colors shadow-sm";
+      btn.textContent = label;
+    }
+    
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = "...";
+      toggleTaskStage(taskId, stage, isCompleted);
+    };
+    
+    return btn;
+  }
+
   function renderList(source) {
     taskList.innerHTML = "";
     if (!source.length) {
@@ -117,15 +163,16 @@
     emptyState.classList.add("hidden");
 
     source.forEach(it => {
-      const done = isDoneVal(it.status_raw);
+      const allDone = it.first_read && it.notes && it.revision;
       const card = document.createElement("div");
-      card.className = "task " + (done ? "done" : "pending");
+      card.className = "task " + (allDone ? "done" : "pending");
 
       const left = document.createElement("div");
       const title = document.createElement("div");
       title.className = "title";
-      // Add strikethrough if task is done
-      if (done) {
+      
+      // Add strikethrough if all stages are done
+      if (allDone) {
         title.style.textDecoration = "line-through";
         title.style.opacity = "0.7";
       }
@@ -133,8 +180,13 @@
 
       const meta = document.createElement("div");
       meta.className = "meta";
+      
+      // Count completed stages
+      const completedStages = (it.first_read ? 1 : 0) + (it.notes ? 1 : 0) + (it.revision ? 1 : 0);
+      const stageText = `${completedStages}/3 stages`;
+      
       meta.innerHTML = `
-        <span class="badge ${done ? "done":"pending"}">${done ? "Finished" : "Pending"}</span>
+        <span class="badge ${allDone ? "done":"pending"}">${allDone ? "All Done" : stageText}</span>
         <span class="badge">Week ${it.week_no || "-"}</span>
         <span class="badge">Goal: ${it.monthly_task_id || "-"}</span>
       `;
@@ -142,29 +194,19 @@
       left.appendChild(title);
       left.appendChild(meta);
 
-      // Action button (full width on mobile, auto on desktop)
+      // Three-stage buttons
       const right = document.createElement("div");
-      right.className = "flex items-center justify-stretch md:justify-end gap-2 w-full md:w-auto";
+      right.className = "stage-buttons-container";
       
-      const actionBtn = document.createElement("button");
-      if (done) {
-        // Completed state: Green button with "Completed"
-        actionBtn.className = "w-full md:w-auto px-4 py-2.5 md:py-2 rounded-lg text-sm md:text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm";
-        actionBtn.textContent = "✓ Completed";
-      } else {
-        // Pending state: Yellow button with "Mark as Done"
-        actionBtn.className = "w-full md:w-auto px-4 py-2.5 md:py-2 rounded-lg text-sm md:text-xs font-semibold bg-yellow-500 hover:bg-yellow-400 text-gray-900 transition-colors shadow-sm";
-        actionBtn.textContent = "Mark as Done";
-      }
+      const buttonsWrapper = document.createElement("div");
+      buttonsWrapper.className = "stage-buttons";
       
-      actionBtn.onclick = (e) => {
-        e.stopPropagation();
-        actionBtn.disabled = true;
-        actionBtn.textContent = "...";
-        toggleTaskCompletion(it.id, done);
-      };
+      // Create three buttons
+      buttonsWrapper.appendChild(createStageButton('first_read', it.first_read, it.id, 'First Read'));
+      buttonsWrapper.appendChild(createStageButton('notes', it.notes, it.id, 'Notes'));
+      buttonsWrapper.appendChild(createStageButton('revision', it.revision, it.id, 'Revision'));
       
-      right.appendChild(actionBtn);
+      right.appendChild(buttonsWrapper);
 
       card.appendChild(left);
       card.appendChild(right);

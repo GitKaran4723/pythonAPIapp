@@ -252,6 +252,70 @@ def mark_task_done():
         return jsonify({"error": str(e)}), 500
 
 
+# Task stage completion endpoint (for daily tasks with 3 stages)
+@app.route("/api/task/stage", methods=["POST"])
+def mark_task_stage_done():
+    """
+    Mark a specific stage of a daily task as complete or incomplete.
+    Expects JSON: { 
+        "task_id": "123", 
+        "task_type": "daily",
+        "stage": "first_read|notes|revision", 
+        "completed": true|false, 
+        "month_year": "oct_2025" 
+    }
+    """
+    try:
+        data = request.json or {}
+        task_id = data.get("task_id")
+        task_type = data.get("task_type", "daily")
+        stage = data.get("stage")
+        completed = data.get("completed", True)
+        month_year = data.get("month_year")
+        
+        if not task_id:
+            return jsonify({"error": "task_id is required"}), 400
+        
+        if not stage or stage not in ['first_read', 'notes', 'revision']:
+            return jsonify({"error": "stage must be one of: first_read, notes, revision"}), 400
+        
+        # Create full task_id with type prefix
+        full_task_id = f"{task_type}_{task_id}"
+        
+        success = db_cache.mark_task_stage(full_task_id, task_type, stage, completed, month_year)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "task_id": task_id,
+                "stage": stage,
+                "completed": completed
+            })
+        else:
+            return jsonify({"error": "Failed to update task stage"}), 500
+            
+    except Exception as e:
+        app.logger.exception("Error marking task stage")
+        return jsonify({"error": str(e)}), 500
+
+
+# Get task progress/percentage
+@app.route("/api/task/progress", methods=["GET"])
+def get_task_progress():
+    """
+    Get progress statistics for daily tasks.
+    Query params: date (optional, yyyy-mm-dd format)
+    Returns: { total_tasks, total_stages, completed_stages, percentage }
+    """
+    try:
+        date = request.args.get("date")
+        progress = db_cache.get_task_progress(date)
+        return jsonify(progress)
+    except Exception as e:
+        app.logger.exception("Error getting task progress")
+        return jsonify({"error": str(e)}), 500
+
+
 # Optional: manual refresh endpoint (guarded by token)
 @app.route("/admin/refresh")
 def admin_refresh():
