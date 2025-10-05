@@ -11,7 +11,7 @@ import google.generativeai as genai
 from youtube_transcript_api import YouTubeTranscriptApi
 
 # your module
-import sheet_cache
+import db_cache
 
 # IMPORTANT: do NOT import/start APScheduler at module import time
 # (PythonAnywhere uWSGI has threads disabled)
@@ -26,9 +26,9 @@ Schedule_data_script_url = os.getenv('web_app')
 # ---------- INITIAL (SYNC) WARMUP, OPTIONAL ----------
 # This is safe because it's synchronous and wrapped in try/except.
 try:
-    cache = sheet_cache.get_cached_tables()
+    cache = db_cache.get_cached_tables()
     if not cache.get("Monthly") and not cache.get("daily_OCT"):
-        sheet_cache.refresh_cache(Schedule_data_script_url)
+        db_cache.refresh_cache(Schedule_data_script_url)
 except Exception as e:
     app.logger.warning(f"Initial cache refresh failed: {e}")
 
@@ -36,14 +36,14 @@ except Exception as e:
 @app.route("/schedule")
 def home():
     """
-    Prefer cached CSVs. If empty (first boot), try one sync refresh.
+    Prefer cached database. If empty (first boot), try one sync refresh.
     """
-    data = sheet_cache.get_cached_tables()
+    data = db_cache.get_cached_tables()
 
     if not data.get("Monthly") and not data.get("daily_OCT"):
         try:
-            sheet_cache.refresh_cache(Schedule_data_script_url)
-            data = sheet_cache.get_cached_tables()
+            db_cache.refresh_cache(Schedule_data_script_url)
+            data = db_cache.get_cached_tables()
         except Exception as e:
             app.logger.error(f"Live refresh failed: {e}")
 
@@ -64,7 +64,7 @@ def daily():
     except Exception:
         view_date = today_ist.isoformat()
 
-    tables = sheet_cache.get_cached_tables()
+    tables = db_cache.get_cached_tables()
     daily_rows = tables.get("daily_OCT", [])
     monthly_rows = tables.get("Monthly", [])
 
@@ -161,7 +161,7 @@ def daily():
 # Optional raw JSON for debugging
 @app.route("/schedule.json")
 def schedule_json():
-    return sheet_cache.get_cached_tables()
+    return db_cache.get_cached_tables()
 
 @app.route("/")
 def index():
@@ -216,6 +216,42 @@ def ask():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# Task completion endpoint
+@app.route("/api/task/complete", methods=["POST"])
+def mark_task_done():
+    """
+    Mark a task as complete or incomplete.
+    Expects JSON: { "task_id": "123", "task_type": "daily|monthly", "completed": true|false, "month_year": "oct_2025" }
+    """
+    try:
+        data = request.json or {}
+        task_id = data.get("task_id")
+        task_type = data.get("task_type", "daily")
+        completed = data.get("completed", True)
+        month_year = data.get("month_year")
+        
+        if not task_id:
+            return jsonify({"error": "task_id is required"}), 400
+        
+        # Create full task_id with type prefix
+        full_task_id = f"{task_type}_{task_id}"
+        
+        success = db_cache.mark_task_complete(full_task_id, task_type, completed, month_year)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "task_id": task_id,
+                "completed": completed
+            })
+        else:
+            return jsonify({"error": "Failed to update task"}), 500
+            
+    except Exception as e:
+        app.logger.exception("Error marking task complete")
+        return jsonify({"error": str(e)}), 500
+
+
 # Optional: manual refresh endpoint (guarded by token)
 @app.route("/admin/refresh")
 def admin_refresh():
@@ -223,7 +259,7 @@ def admin_refresh():
     if token != os.getenv("ADMIN_TOKEN", "dev"):
         return "Forbidden", 403
     try:
-        sheet_cache.refresh_cache(Schedule_data_script_url)
+        db_cache.refresh_cache(Schedule_data_script_url)
         return "OK"
     except Exception as e:
         app.logger.exception("Manual refresh failed")
@@ -240,7 +276,7 @@ if __name__ == '__main__':
         import atexit
 
         scheduler = BackgroundScheduler(timezone="Asia/Kolkata", daemon=True)
-        scheduler.add_job(lambda: sheet_cache.refresh_cache(Schedule_data_script_url),
+        scheduler.add_job(lambda: db_cache.refresh_cache(Schedule_data_script_url),
                           trigger="cron", minute=0)
         scheduler.start()
         atexit.register(lambda: scheduler.shutdown(wait=False))

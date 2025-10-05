@@ -30,34 +30,105 @@
 
 /* Task cards — compact & readable on phones */
 .task{
-  display:grid; grid-template-columns: 1fr auto; gap:8px; align-items:start;
-  padding:12px; border-radius:14px;
+  display:flex; 
+  flex-direction: column;
+  gap:12px; 
+  padding:16px; 
+  border-radius:16px;
   background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
   border:1px solid rgba(255,255,255,.12);
 }
-.task .title{ font-weight:600; color:#e5e7eb; font-size: .98rem; }
-.meta{ color:#94a3b8; font-size:12px; margin-top:4px; display:flex; gap:6px; flex-wrap:wrap; }
-.badge{
-  display:inline-flex; align-items:center; gap:6px;
-  padding:3px 7px; border-radius:999px; border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.04); font-size:11px; font-weight:600; color:#cbd5e1;
+
+/* Desktop: side-by-side layout */
+@media (min-width: 768px){
+  .task{
+    display:grid; 
+    grid-template-columns: 1fr auto; 
+    gap:16px; 
+    align-items:start;
+  }
 }
-.badge.done{ color:#22c55e; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.12); }
-.badge.pending{ color:#f59e0b; border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.12); }
+
+.task .title{ 
+  font-weight:600; 
+  color:#e5e7eb; 
+  font-size: 1rem;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.meta{ 
+  color:#94a3b8; 
+  font-size:12px; 
+  display:flex; 
+  gap:6px; 
+  flex-wrap:wrap; 
+}
+
+.badge{
+  display:inline-flex; 
+  align-items:center; 
+  gap:6px;
+  padding:4px 8px; 
+  border-radius:999px; 
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04); 
+  font-size:11px; 
+  font-weight:600; 
+  color:#cbd5e1;
+}
+
+.badge.done{ 
+  color:#22c55e; 
+  border-color: rgba(34,197,94,.35); 
+  background: rgba(34,197,94,.12); 
+}
+
+.badge.pending{ 
+  color:#f59e0b; 
+  border-color: rgba(245,158,11,.35); 
+  background: rgba(245,158,11,.12); 
+}
 
 .task.done{
   border-color: rgba(34,197,94,.4);
   background: linear-gradient(180deg, rgba(34,197,94,.12), rgba(255,255,255,.03));
 }
-.task.pending{ border-color: rgba(255,255,255,.08); }
+
+.task.pending{ 
+  border-color: rgba(255,255,255,.08); 
+}
 
 /* All-done banner */
 .win{
   display:none; margin-bottom:10px;
   border:1px dashed rgba(34,197,94,.5); border-radius:12px; padding:10px;
   background: rgba(34,197,94,.08); color:#22c55e; font-weight:700; font-size:.95rem;
+  text-align: center;
 }
 .win.show{ display:block; }
+
+/* Mobile-specific improvements */
+@media (max-width: 767px) {
+  .task {
+    padding: 16px 14px;
+  }
+  
+  .task .title {
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  
+  .meta {
+    margin-top: 8px;
+  }
+  
+  /* Make badges more readable on mobile */
+  .badge {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+}
 
 /* Sticky bottom nav (phones) */
 .daily-bottom-nav{

@@ -1,5 +1,51 @@
+# Environment Variables - SENSITIVE!
 .env
-__pycache__
+.env.local
+.env.production
+.env.development
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# Modules (if they exist)
 gemini.py
 youtubeModule.py
-data_cache
+
+# Data Cache - Databases and CSVs
+data_cache/
+data_cache/*.db
+data_cache/*.db-*
+data_cache/*.csv
+
+# Virtual Environments
+venv/
+env/
+ENV/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+.coverage
+
+# Backup files
+*.bak
+*.backup
+*.tmp

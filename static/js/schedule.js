@@ -129,20 +129,81 @@
       });
     }
 
+    async function toggleMonthlyTask(taskId, currentDone, monthYear, button) {
+      try {
+        button.disabled = true;
+        button.textContent = "...";
+        
+        const response = await fetch('/api/task/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            task_id: taskId,
+            task_type: 'monthly',
+            completed: !currentDone,
+            month_year: monthYear
+          })
+        });
+        
+        if (response.ok) {
+          location.reload();
+        } else {
+          alert('Failed to update task. Please try again.');
+          button.disabled = false;
+          button.textContent = currentDone ? "↶ Undo" : "✓ Done";
+        }
+      } catch (error) {
+        console.error('Error updating task:', error);
+        alert('Network error. Please check your connection.');
+        button.disabled = false;
+        button.textContent = currentDone ? "↶ Undo" : "✓ Done";
+      }
+    }
+
+    const isDone = (task) => {
+      const status = String(task.Status || "").toLowerCase().trim();
+      return status === "done" || status === "completed" || status === "finished" || status === "1" || status === "true";
+    };
+
     const taskCard = (task) => {
       const s = STYLE[task.Goals] || { badge:"bg-slate-700/50 border border-slate-600/40 text-slate-200", ring:"ring-slate-600/30", dot:"bg-slate-400" };
       const phase = task.prep_phase ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/70 border border-slate-700/60">Phase ${task.prep_phase}</span>` : ``;
       const anchor = task.id ? `id="task-${task.id}"` : "";
+      const done = isDone(task);
+      const statusBadge = done ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/20 border border-emerald-500/40 text-emerald-200">✓ Done</span>` : "";
+      
+      // Button styling: Yellow for pending, Green for completed
+      // Mobile: full width, Desktop: auto width
+      const buttonClass = done 
+        ? 'w-full md:w-auto px-4 py-2.5 md:px-2.5 md:py-1.5 rounded-lg text-sm md:text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm'
+        : 'w-full md:w-auto px-4 py-2.5 md:px-2.5 md:py-1.5 rounded-lg text-sm md:text-xs font-semibold bg-yellow-500 hover:bg-yellow-400 text-gray-900 shadow-sm';
+      const buttonText = done ? '✓ Completed' : 'Mark as Done';
+      
+      // Task text styling with strikethrough
+      const taskTextStyle = done ? 'style="text-decoration: line-through; opacity: 0.7;"' : '';
+      
       return `
-        <div ${anchor} class="glass rounded-xl p-3 ring-1 ${s.ring}">
-          <div class="flex items-start gap-3">
-            <div class="mt-1"><div class="h-2.5 w-2.5 rounded-full ${s.dot}"></div></div>
+        <div ${anchor} class="glass rounded-xl p-4 ring-1 ${s.ring}">
+          <div class="flex flex-col md:flex-row md:items-start gap-3">
+            <div class="mt-1 hidden md:block"><div class="h-2.5 w-2.5 rounded-full ${s.dot}"></div></div>
             <div class="flex-1">
-              <div class="flex items-center gap-2 flex-wrap mb-1">
+              <div class="flex items-center gap-2 flex-wrap mb-2">
                 <span class="text-xs px-2 py-1 rounded-full ${s.badge}">${task.Goals || "Goal"}</span>
                 ${phase}
+                ${statusBadge}
               </div>
-              <div class="text-sm leading-snug text-slate-100">${task.to_do || ""}</div>
+              <div class="text-sm md:text-sm leading-relaxed text-slate-100 mb-3 md:mb-0" ${taskTextStyle}>${task.to_do || ""}</div>
+            </div>
+            <div class="w-full md:w-auto flex md:block">
+              <button 
+                class="${buttonClass} transition-colors"
+                onclick="window.toggleTask_${task.id}(this)"
+                data-task-id="${task.id}"
+                data-month="${task.month_year || ''}"
+                data-done="${done}"
+              >
+                ${buttonText}
+              </button>
             </div>
           </div>
         </div>`;
@@ -180,7 +241,22 @@
     };
 
     function render(view) {
-      if (elTimeline) elTimeline.innerHTML = view.map(monthBlock).join("");
+      if (elTimeline) {
+        elTimeline.innerHTML = view.map(monthBlock).join("");
+        
+        // Attach event handlers to all task buttons
+        view.forEach(m => {
+          m.goals.forEach(g => {
+            g.tasks.forEach(task => {
+              window[`toggleTask_${task.id}`] = function(button) {
+                const done = button.getAttribute('data-done') === 'true';
+                const monthYear = button.getAttribute('data-month');
+                toggleMonthlyTask(task.id, done, monthYear, button);
+              };
+            });
+          });
+        });
+      }
     }
 
     // ---------- Wiring ----------

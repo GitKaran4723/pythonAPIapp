@@ -82,6 +82,31 @@
     winBanner.classList.toggle("show", pct === 100);
   }
 
+  async function toggleTaskCompletion(taskId, currentDone) {
+    try {
+      const response = await fetch('/api/task/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task_id: taskId,
+          task_type: 'daily',
+          completed: !currentDone,
+          month_year: null
+        })
+      });
+      
+      if (response.ok) {
+        // Reload the page to reflect changes
+        location.reload();
+      } else {
+        alert('Failed to update task. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+      alert('Network error. Please check your connection.');
+    }
+  }
+
   function renderList(source) {
     taskList.innerHTML = "";
     if (!source.length) {
@@ -99,6 +124,11 @@
       const left = document.createElement("div");
       const title = document.createElement("div");
       title.className = "title";
+      // Add strikethrough if task is done
+      if (done) {
+        title.style.textDecoration = "line-through";
+        title.style.opacity = "0.7";
+      }
       title.textContent = it.task_name || "(Untitled Task)";
 
       const meta = document.createElement("div");
@@ -112,9 +142,29 @@
       left.appendChild(title);
       left.appendChild(meta);
 
-      // Right column stays empty in read-only; keeps grid layout tidy
+      // Action button (full width on mobile, auto on desktop)
       const right = document.createElement("div");
-      right.className = "hidden md:block";
+      right.className = "flex items-center justify-stretch md:justify-end gap-2 w-full md:w-auto";
+      
+      const actionBtn = document.createElement("button");
+      if (done) {
+        // Completed state: Green button with "Completed"
+        actionBtn.className = "w-full md:w-auto px-4 py-2.5 md:py-2 rounded-lg text-sm md:text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors shadow-sm";
+        actionBtn.textContent = "✓ Completed";
+      } else {
+        // Pending state: Yellow button with "Mark as Done"
+        actionBtn.className = "w-full md:w-auto px-4 py-2.5 md:py-2 rounded-lg text-sm md:text-xs font-semibold bg-yellow-500 hover:bg-yellow-400 text-gray-900 transition-colors shadow-sm";
+        actionBtn.textContent = "Mark as Done";
+      }
+      
+      actionBtn.onclick = (e) => {
+        e.stopPropagation();
+        actionBtn.disabled = true;
+        actionBtn.textContent = "...";
+        toggleTaskCompletion(it.id, done);
+      };
+      
+      right.appendChild(actionBtn);
 
       card.appendChild(left);
       card.appendChild(right);
